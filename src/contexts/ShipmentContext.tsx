@@ -1,165 +1,173 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Shipment, FleetVehicle } from '../types';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { Shipment, FleetVehicle, ShipmentStatus } from '../types';
+import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
 
 interface ShipmentContextType {
   shipments: Shipment[];
   vehicles: FleetVehicle[];
-  sascarCredentials: { user: string; login: string; pass: string };
-  setSascarCredentials: (creds: { user: string; login: string; pass: string }) => void;
-  syncStatus: { lastSync: string | null; error: string | null; loading: boolean };
-  addShipment: (shipment: Omit<Shipment, 'lastUpdate'>) => void;
-  updateShipment: (id: string, updates: Partial<Shipment>) => void;
-  deleteShipment: (id: string) => void;
-  syncSascar: (silent?: boolean) => Promise<void>;
+  addShipment: (shipment: Omit<Shipment, 'lastUpdate' | 'id'>) => Promise<void>;
+  updateShipment: (id: string, updates: Partial<Shipment>) => Promise<void>;
+  deleteShipment: (id: string) => Promise<void>;
+  syncSascar: () => Promise<void>;
+  loading: boolean;
 }
 
 const ShipmentContext = createContext<ShipmentContextType | undefined>(undefined);
 
-// Initial mock data
-const INITIAL_SHIPMENTS: Shipment[] = [
-  {
-    id: "J&T-990-21",
-    vehicle: "Scania R450",
-    plate: "ABC-1234",
-    route: "Goiânia → Manaus",
-    status: "EM TRÂNSITO",
-    progress: 45,
-    lastUpdate: "Agora",
-    client: "J&T Express"
-  },
-  {
-    id: "J&T-992-18",
-    vehicle: "Mercedes Actros",
-    plate: "XYZ-8890",
-    route: "Rio de Janeiro → Vitória",
-    status: "ENTREGA FINAL",
-    progress: 92,
-    lastUpdate: "há 12 min",
-    client: "Mercado Livre"
-  },
-  {
-    id: "J&T-885-04",
-    vehicle: "Volvo FH 540",
-    plate: "DFG-4451",
-    route: "Brasília → Fortaleza",
-    status: "PARADO (PONTO DE APOIO)",
-    progress: 60,
-    lastUpdate: "há 44 min",
-    client: "Shopee"
-  }
-];
-
 export const ShipmentProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [shipments, setShipments] = useState<Shipment[]>(() => {
-    const saved = localStorage.getItem('transpacheco_shipments');
-    return saved ? JSON.parse(saved) : INITIAL_SHIPMENTS;
-  });
+  const { isAuthenticated } = useAuth();
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [vehicles, setVehicles] = useState<FleetVehicle[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const [vehicles, setVehicles] = useState<FleetVehicle[]>(() => {
-    const saved = localStorage.getItem('transpacheco_vehicles');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [sascarCredentials, setSascarCredentials] = useState(() => {
-    const saved = localStorage.getItem('transpacheco_sascar_creds');
-    try {
-      return saved ? JSON.parse(saved) : { user: '', login: '', pass: '' };
-    } catch {
-      return { user: '', login: '', pass: '' };
+  // Fetch initial data from Supabase
+  const fetchData = useCallback(async () => {
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
     }
-  });
 
-  const [syncStatus, setSyncStatus] = useState<{ lastSync: string | null; error: string | null; loading: boolean }>({
-    lastSync: null,
-    error: null,
-    loading: false
-  });
-
-  useEffect(() => {
-    localStorage.setItem('transpacheco_shipments', JSON.stringify(shipments));
-  }, [shipments]);
-
-  useEffect(() => {
-    localStorage.setItem('transpacheco_vehicles', JSON.stringify(vehicles));
-  }, [vehicles]);
-
-  useEffect(() => {
-    localStorage.setItem('transpacheco_sascar_creds', JSON.stringify(sascarCredentials));
-  }, [sascarCredentials]);
-
-  const syncSascar = async (silent = false) => {
-    setSyncStatus(prev => ({ ...prev, loading: true, error: null }));
     try {
-      const response = await fetch('/api/sascar/fleet', {
-        headers: {
-          'x-sascar-user': sascarCredentials.user,
-          'x-sascar-login': sascarCredentials.login,
-          'x-sascar-pass': sascarCredentials.pass
-        }
-      });
+      setLoading(true);
+      
+      // Fetch Shipments
+      const { data: shipmentData, error: shipmentError } = await supabase
+        .from('shipments')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (shipmentError) throw shipmentError;
+
+      // Fetch Vehicles
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('*');
+      
+      if (vehicleError) throw vehicleError;
+
+      if (shipmentData) {
+        setShipments(shipmentData.map(s => ({
+          id: s.id,
+          vehicle: s.vehicle_name || 'Desconhecido',
+          plate: s.plate || '',
+          route: s.route || '',
+          status: s.status as ShipmentStatus,
+          progress: s.progress || 0,
+          lastUpdate: new Date(s.last_update).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          client: s.client || '',
+          startTime: s.start_time,
+          estimatedArrival: s.estimated_arrival
+        })));
+      }
+
+      if (vehicleData) {
+        setVehicles(vehicleData.map(v => ({
+          id: v.id,
+          plate: v.plate,
+          prefix: v.prefix,
+          lat: v.last_lat || 0,
+          lng: v.last_lng || 0,
+          speed: v.last_speed || 0,
+          lastUpdate: v.last_update ? new Date(v.last_update).toLocaleTimeString() : 'N/A',
+          ignition: v.ignition || false,
+          address: v.address || ''
+        })));
+      }
+    } catch (err) {
+      console.error('Error fetching data from Supabase:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (!isAuthenticated) return;
+
+    // Subscribe to real-time changes
+    const shipmentsChannel = supabase.channel('public:shipments')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shipments' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    const vehiclesChannel = supabase.channel('public:vehicles')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'vehicles' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(shipmentsChannel);
+      supabase.removeChannel(vehiclesChannel);
+    };
+  }, [isAuthenticated, fetchData]);
+
+  const syncSascar = async () => {
+    try {
+      const response = await fetch('/api/sascar/fleet');
+      if (!response.ok) throw new Error('Erro na sincronização');
       const data = await response.json();
       
-      if (!response.ok) {
-        let errorMsg = data.detail ? `${data.error}: ${data.detail}` : (data.error || 'Erro na sincronização');
-        if (data.logs) {
-          errorMsg += `\n\nLogs do Sistema:\n${data.logs.join('\n')}`;
-        }
-        throw new Error(errorMsg);
-      }
-      
       if (data.vehicles) {
-        setVehicles(data.vehicles);
-        setSyncStatus({ 
-          lastSync: new Date().toLocaleTimeString(), 
-          error: null, 
-          loading: false 
-        });
-        if (!silent) {
-          console.log(`Sincronização concluída! ${data.vehicles.length} veículos encontrados.`);
+        // Here we would ideally upsert to Supabase
+        for (const v of data.vehicles) {
+          await supabase.from('vehicles').upsert({
+            plate: v.plate,
+            prefix: v.prefix,
+            last_lat: v.lat,
+            last_lng: v.lng,
+            last_speed: v.speed,
+            last_update: new Date().toISOString(),
+            ignition: v.ignition,
+            address: v.address
+          });
         }
+        await fetchData();
       }
     } catch (err: any) {
-      console.error('Auto-sync failed:', err.message);
-      setSyncStatus({ 
-        lastSync: new Date().toLocaleTimeString(), 
-        error: err.message, 
-        loading: false 
-      });
-      if (!silent) alert(err.message);
+      console.error('Sascar sync failed:', err.message);
     }
   };
 
-  // Automatic sync on mount and every 5 minutes
-  useEffect(() => {
-    syncSascar(true); // Initial sync (silent)
-    
-    const interval = setInterval(() => {
-      syncSascar(true);
-    }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const addShipment = (shipment: Omit<Shipment, 'lastUpdate'>) => {
-    const newShipment: Shipment = {
-      ...shipment,
-      lastUpdate: 'Agora'
-    };
-    setShipments(prev => [newShipment, ...prev]);
+  const addShipment = async (shipment: Omit<Shipment, 'lastUpdate' | 'id'>) => {
+    const { error } = await supabase.from('shipments').insert({
+      vehicle_name: shipment.vehicle,
+      plate: shipment.plate,
+      route: shipment.route,
+      status: shipment.status,
+      progress: shipment.progress,
+      client: shipment.client,
+      start_time: shipment.startTime,
+      estimated_arrival: shipment.estimatedArrival
+    });
+    if (error) throw error;
   };
 
-  const updateShipment = (id: string, updates: Partial<Shipment>) => {
-    setShipments(prev => prev.map(s => 
-      s.id === id ? { ...s, ...updates, lastUpdate: 'Agora' } : s
-    ));
+  const updateShipment = async (id: string, updates: Partial<Shipment>) => {
+    const { error } = await supabase.from('shipments').update({
+      vehicle_name: updates.vehicle,
+      plate: updates.plate,
+      route: updates.route,
+      status: updates.status,
+      progress: updates.progress,
+      client: updates.client,
+      start_time: updates.startTime,
+      estimated_arrival: updates.estimatedArrival,
+      last_update: new Date().toISOString()
+    }).eq('id', id);
+    if (error) throw error;
   };
 
-  const deleteShipment = (id: string) => {
-    setShipments(prev => prev.filter(s => s.id !== id));
+  const deleteShipment = async (id: string) => {
+    const { error } = await supabase.from('shipments').delete().eq('id', id);
+    if (error) throw error;
   };
 
   return (
-    <ShipmentContext.Provider value={{ shipments, vehicles, sascarCredentials, setSascarCredentials, syncStatus, addShipment, updateShipment, deleteShipment, syncSascar }}>
+    <ShipmentContext.Provider value={{ shipments, vehicles, addShipment, updateShipment, deleteShipment, syncSascar, loading }}>
       {children}
     </ShipmentContext.Provider>
   );

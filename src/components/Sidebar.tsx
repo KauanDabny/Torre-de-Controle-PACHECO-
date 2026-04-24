@@ -10,13 +10,10 @@ import {
   Settings, 
   HelpCircle,
   LogOut,
-  X,
-  Wifi,
-  WifiOff
+  X
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
-import { useShipments } from '../contexts/ShipmentContext';
 
 interface SidebarProps {
   activeView: string;
@@ -27,7 +24,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOpen, onClose }) => {
   const { user, logout } = useAuth();
-  const { syncStatus, vehicles } = useShipments();
   
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -71,16 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
             </div>
             <div>
               <h1 className="text-lg font-bold text-primary-container leading-tight">Pacheco</h1>
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Logística</p>
-                <div className={cn(
-                  "flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-black",
-                  syncStatus.error ? "bg-red-100 text-red-600" : (syncStatus.lastSync ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400")
-                )}>
-                  {syncStatus.error ? <WifiOff size={8} /> : <Wifi size={8} />}
-                  {syncStatus.error ? "OFFLINE" : (syncStatus.lastSync ? "SASCAR OK" : "PAGINA")}
-                </div>
-              </div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Logística</p>
             </div>
           </div>
           {/* Mobile Close Button */}
@@ -133,18 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
           Novo Envio
         </button>
         
-        <button 
-          onClick={() => {
-            onViewChange('settings');
-            onClose?.();
-          }}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-200",
-            activeView === 'settings' 
-              ? "text-primary-container font-bold bg-slate-50" 
-              : "text-slate-500 hover:text-primary-container hover:bg-slate-50"
-          )}
-        >
+        <button className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-primary-container transition-colors">
           <Settings size={20} />
           <span className="text-sm">Configurações</span>
         </button>

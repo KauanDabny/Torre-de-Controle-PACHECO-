@@ -21,7 +21,6 @@ export interface FleetVehicle {
   lng: number;
   speed: number;
   direction?: string;
-  driver?: string;
   lastUpdate: string;
   ignition: boolean;
   address: string;

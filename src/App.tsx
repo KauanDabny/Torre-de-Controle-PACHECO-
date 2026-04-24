@@ -8,12 +8,11 @@ import { PerformanceView } from './components/PerformanceView';
 import { LoginView } from './components/LoginView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentProvider } from './contexts/ShipmentContext';
-import { Headphones } from 'lucide-react';
+import { Headphones, Loader2 } from 'lucide-react';
 import { ShipmentsView } from './components/ShipmentsView';
-import { SettingsView } from './components/SettingsView';
 
 function AppContent() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const [activeView, setActiveView] = useState('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -24,7 +23,6 @@ function AppContent() {
       case 'fleet': return 'Status da Frota';
       case 'performance': return 'Painel de Performance';
       case 'shipments': return 'Gestão de Envios';
-      case 'settings': return 'Configurações do Sistema';
       case 'reports': return 'Relatórios e BI';
       default: return 'Portal Logístico';
     }
@@ -37,7 +35,6 @@ function AppContent() {
       case 'fleet': return <FleetStatusView />;
       case 'performance': return <PerformanceView />;
       case 'shipments': return <ShipmentsView />;
-      case 'settings': return <SettingsView />;
       default: return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] text-slate-400 p-8">
           <div className="max-w-md w-full bg-white border border-outline-variant rounded-xl shadow-sm text-center p-12">
@@ -48,6 +45,14 @@ function AppContent() {
       );
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-primary-container animate-spin" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <LoginView />;

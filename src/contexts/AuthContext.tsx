@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface User {
+  id: string;
   name: string;
   role: string;
   avatar: string;
@@ -9,42 +12,74 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (name: string, role: string) => void;
-  logout: () => void;
+  login: (email: string) => Promise<{ error: any }>;
+  logout: () => Promise<void>;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Load from local storage if exists
   useEffect(() => {
-    const savedUser = localStorage.getItem('transpacheco_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
+    // Check active sessions and subscribe to auth changes
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        mapSupabaseUserToUser(session.user);
+      }
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        mapSupabaseUserToUser(session.user);
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = (name: string, role: string) => {
-    const newUser = {
-      name,
-      role,
-      email: 'user@transpacheco.com.br',
-      avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
-    };
-    setUser(newUser);
-    localStorage.setItem('transpacheco_user', JSON.stringify(newUser));
+  const mapSupabaseUserToUser = async (sbUser: SupabaseUser) => {
+    // Try to get profile from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', sbUser.id)
+      .single();
+
+    setUser({
+      id: sbUser.id,
+      name: profile?.full_name || sbUser.user_metadata?.full_name || 'Usuário Supabase',
+      role: profile?.role || 'operator',
+      email: sbUser.email || '',
+      avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
+    });
   };
 
-  const logout = () => {
+  const login = async (email: string) => {
+    // Using passwordless magic link as a simple example, or you could use signInWithPassword
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    return { error };
+  };
+
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('transpacheco_user');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );
