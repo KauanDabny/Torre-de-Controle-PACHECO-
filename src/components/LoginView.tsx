@@ -3,56 +3,44 @@ import { useAuth } from '../contexts/AuthContext';
 import { Truck, ShieldCheck, ArrowRight, Loader2, MailCheck } from 'lucide-react';
 
 export const LoginView: React.FC = () => {
-  const { login } = useAuth();
+  const { login, signUp } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSent, setIsSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !email.includes('@')) return;
+    if (!email.trim() || !password.trim()) return;
+    if (isSignUp && !fullName.trim()) return;
 
     setIsLoading(true);
     setError(null);
     try {
-      const { error } = await login(email);
-      if (error) {
-        setError(error.message);
+      if (isSignUp) {
+        const { error } = await signUp(email, password, { full_name: fullName });
+        if (error) {
+          setError(error.message);
+        } else {
+          setError('Conta criada! Agora você pode fazer o login.');
+          setIsSignUp(false);
+          // Optional: Clear password after success
+          setPassword('');
+        }
       } else {
-        setIsSent(true);
+        const { error } = await login(email, password);
+        if (error) {
+          setError(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : error.message);
+        }
       }
     } catch (err: any) {
-      setError(err.message || 'Erro ao tentar fazer login');
+      setError(err.message || 'Erro ao processar solicitação');
     } finally {
       setIsLoading(false);
     }
   };
-
-  if (isSent) {
-    return (
-      <div className="min-h-screen bg-primary-container flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-12 text-center animate-in zoom-in duration-300">
-          <div className="flex justify-center mb-6">
-            <div className="bg-green-100 text-green-600 p-4 rounded-full">
-              <MailCheck size={48} />
-            </div>
-          </div>
-          <h2 className="display-md text-primary-container mb-4">Link enviado!</h2>
-          <p className="text-slate-500 font-medium mb-8">
-            Enviamos um link de acesso para <strong>{email}</strong>. 
-            Verifique sua caixa de entrada e spam.
-          </p>
-          <button 
-            onClick={() => setIsSent(false)}
-            className="text-primary-container font-black text-xs uppercase tracking-widest hover:underline"
-          >
-            Tentar outro e-mail
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-primary-container flex items-center justify-center p-4 selection:bg-teal-400 selection:text-primary-container">
@@ -70,11 +58,29 @@ export const LoginView: React.FC = () => {
                 }}
               />
             </div>
-            <h2 className="display-lg text-primary-container tracking-tighter">Login</h2>
-            <p className="text-slate-500 text-sm font-medium">Hub Logístico TransPacheco (Supabase Auth)</p>
+            <h2 className="display-lg text-primary-container tracking-tighter">
+              {isSignUp ? 'Criar Conta' : 'Login'}
+            </h2>
+            <p className="text-slate-500 text-sm font-medium">Hub Logístico TransPacheco</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {isSignUp && (
+              <div className="space-y-2">
+                <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                  Nome Completo
+                </label>
+                <input 
+                  type="text" 
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Seu nome"
+                  required
+                  className="w-full px-4 py-3 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all placeholder:text-slate-300 font-medium"
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 ml-1">
                 E-mail Corporativo
@@ -89,31 +95,57 @@ export const LoginView: React.FC = () => {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                Senha
+              </label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full px-4 py-3 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container focus:border-transparent outline-none transition-all placeholder:text-slate-300 font-medium"
+              />
+            </div>
+
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold">
+              <div className={`p-3 rounded-lg text-xs font-bold ${error.includes('Conta criada') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                 {error}
               </div>
             )}
 
             <button 
               type="submit" 
-              disabled={isLoading || !email.trim()}
+              disabled={isLoading || !email.trim() || !password.trim() || (isSignUp && !fullName.trim())}
               className="w-full bg-primary-container text-white py-4 rounded-xl font-black text-sm uppercase tracking-[0.2em] shadow-lg shadow-primary-container/20 hover:opacity-95 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <Loader2 size={18} className="animate-spin" />
               ) : (
                 <>
-                  Receber Link de Acesso <ArrowRight size={18} />
+                  {isSignUp ? 'Cadastrar Agora' : 'Entrar no Sistema'} <ArrowRight size={18} />
                 </>
               )}
             </button>
           </form>
 
+          <div className="mt-8 text-center">
+            <button 
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError(null);
+              }}
+              className="text-[11px] font-black uppercase tracking-widest text-slate-400 hover:text-primary-container transition-colors"
+            >
+              {isSignUp ? 'Já tenho uma conta → Login' : 'Não tem conta? → Cadastrar'}
+            </button>
+          </div>
+
           <div className="mt-12 pt-8 border-t border-outline-variant flex items-center justify-center gap-2 text-slate-400">
             <ShieldCheck size={16} />
             <span className="text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5">
-              Login via Supabase OTP
+              Acesso via Supabase Auth
             </span>
           </div>
         </div>

@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentProvider } from './contexts/ShipmentContext';
 import { Headphones, Loader2 } from 'lucide-react';
 import { ShipmentsView } from './components/ShipmentsView';
+import { Toaster } from 'react-hot-toast';
 
 function AppContent() {
   const { isAuthenticated, loading } = useAuth();
@@ -60,6 +61,7 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-surface selection:bg-primary-container selection:text-white">
+      <Toaster position="top-right" />
       <Sidebar 
         activeView={activeView} 
         onViewChange={setActiveView} 

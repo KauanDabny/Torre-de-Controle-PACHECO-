@@ -25,7 +25,8 @@ interface LeafletMapProps {
 }
 
 export const LeafletMap: React.FC<LeafletMapProps> = ({ className, vehicles = [] }) => {
-  const initialPosition: [number, number] = [-14.235, -51.9253]; // Centered on Brazil
+  const barueriPos: [number, number] = [-23.5062, -46.8762];
+  const initialPosition: [number, number] = barueriPos; 
   
   // Calculate center based on vehicles or use initial
   const center = vehicles.length > 0 
@@ -36,7 +37,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ className, vehicles = []
     <div className={cn("w-full h-full", className)}>
       <MapContainer 
         center={center} 
-        zoom={vehicles.length > 0 ? 12 : 4} 
+        zoom={vehicles.length > 0 ? 12 : 13} 
         scrollWheelZoom={true}
         style={{ width: '100%', height: '100%' }}
       >
@@ -44,6 +45,17 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ className, vehicles = []
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        
+        {/* HQ / Matriz Point */}
+        <Marker position={barueriPos}>
+          <Popup className="custom-popup">
+            <div className="p-2 text-center">
+              <p className="font-black text-primary-container text-xs uppercase tracking-widest">Matriz TransPacheco</p>
+              <p className="text-[10px] text-slate-500 mt-1">Barueri - SP</p>
+            </div>
+          </Popup>
+        </Marker>
+
         {vehicles.map((v) => (
           <Marker key={v.id} position={[v.lat, v.lng]}>
             <Popup className="custom-popup">

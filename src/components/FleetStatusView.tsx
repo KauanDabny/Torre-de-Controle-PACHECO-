@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search,
   Filter,
@@ -11,42 +11,166 @@ import {
   Building2,
   ShieldCheck,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Plus,
+  X,
+  Trash2,
+  Edit2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useShipments } from '../contexts/ShipmentContext';
+import { Shipment, FleetVehicle } from '../types';
+import toast from 'react-hot-toast';
 
 export const FleetStatusView: React.FC = () => {
+  const { vehicles, shipments, loading, addVehicle, updateVehicle, deleteVehicle } = useShipments();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('Todos');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(null);
+
+  // Pair vehicles with their latest shipment
+  const fleetData = useMemo(() => {
+    return vehicles.map(vehicle => {
+      // Find the most recent shipment for this vehicle by plate
+      const vehicleShipments = shipments
+        .filter(s => s.plate === vehicle.plate)
+        .sort((a, b) => {
+          const dateA = a.startTime ? new Date(a.startTime).getTime() : 0;
+          const dateB = b.startTime ? new Date(b.startTime).getTime() : 0;
+          return dateB - dateA;
+        });
+      
+      const latestShipment = vehicleShipments[0];
+      
+      // If there is a shipment and it's not finished, it defines the status
+      // If the shipment is finished, the vehicle is VAZIO
+      const currentShipment = latestShipment && latestShipment.status !== 'ENTREGUE' ? latestShipment : null;
+      
+      return {
+        vehicle,
+        latestShipment: currentShipment
+      };
+    });
+  }, [vehicles, shipments]);
+
+  const filteredFleet = useMemo(() => {
+    return fleetData.filter(item => {
+      const matchesSearch = item.vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           item.vehicle.prefix?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      if (!matchesSearch) return false;
+      
+      if (filter === 'Todos') return true;
+      
+      const status = item.latestShipment?.status || 'VAZIO';
+      if (filter === 'Carregados') return ['EM TRÂNSITO', 'CARREGANDO', 'PARADO (PONTO DE APOIO)'].includes(status);
+      if (filter === 'Aguardando') return status === 'AGUARDANDO';
+      if (filter === 'Vazios') return status === 'VAZIO';
+      if (filter === 'Em Manutenção') return status === 'EM MANUTENÇÃO';
+      
+      return true;
+    });
+  }, [fleetData, searchTerm, filter]);
+
+  const stats = useMemo(() => {
+    const total = vehicles.length;
+    const loaded = fleetData.filter(f => ['EM TRÂNSITO', 'CARREGANDO', 'PARADO (PONTO DE APOIO)'].includes(f.latestShipment?.status || '')).length;
+    const maintenance = fleetData.filter(f => f.latestShipment?.status === 'EM MANUTENÇÃO').length;
+    
+    return { total, loaded, maintenance };
+  }, [vehicles.length, fleetData]);
+
+  const handleOpenModal = (vehicle: FleetVehicle | null = null) => {
+    setEditingVehicle(vehicle);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveVehicle = async (data: Partial<FleetVehicle>) => {
+    try {
+      if (editingVehicle) {
+        await updateVehicle(editingVehicle.id, data);
+        toast.success('Veículo atualizado!');
+      } else {
+        await addVehicle(data as Omit<FleetVehicle, 'id'>);
+        toast.success('Veículo cadastrado!');
+      }
+      setIsModalOpen(false);
+    } catch (error: any) {
+      toast.error(`Erro ao salvar veículo: ${error.message || 'Erro desconhecido'}`);
+    }
+  };
+
+  const handleDeleteVehicle = async (id: string) => {
+    if (confirm('Deseja realmente excluir este veículo?')) {
+      try {
+        await deleteVehicle(id);
+        toast.success('Veículo excluído');
+      } catch (error) {
+        toast.error('Erro ao excluir');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-container"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 flex flex-col gap-8 max-w-7xl mx-auto">
+    <div className="p-8 flex flex-col gap-8 max-w-[1600px] mx-auto">
       {/* Page Header & Stats */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
           <h2 className="display-lg text-primary-container">Status da Frota</h2>
-          <p className="text-body-sm text-slate-500 font-medium">Monitoramento em tempo real de 124 veículos ativos.</p>
+          <p className="text-body-sm text-slate-500 font-medium">Monitoramento em tempo real de {stats.total} veículos ativos.</p>
         </div>
         <div className="flex flex-wrap gap-4 w-full sm:w-auto">
           <StatMiniCard 
             icon={<Package size={18} className="text-primary-container" />}
             label="Carregados"
-            value="82"
+            value={stats.loaded.toString()}
             bgColor="bg-secondary-container"
           />
           <StatMiniCard 
             icon={<Wrench size={18} className="text-tertiary" />}
             label="Em Manutenção"
-            value="14"
+            value={stats.maintenance.toString()}
             bgColor="bg-tertiary-fixed"
           />
+          <button 
+            onClick={() => handleOpenModal()}
+            className="bg-primary-container text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary-container/20"
+          >
+            <Plus size={18} /> Novo Veículo
+          </button>
         </div>
       </div>
 
-      {/* Filter Chips */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar">
-        <FilterChip label="Todos" active />
-        <FilterChip label="Carregados" />
-        <FilterChip label="Aguardando" />
-        <FilterChip label="Vazios" />
-        <FilterChip label="Em Manutenção" />
+      {/* Search and Filters */}
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <div className="bg-white px-4 py-2 rounded-xl border border-outline-variant shadow-sm flex items-center gap-3 flex-1 w-full">
+          <Search size={18} className="text-slate-400" />
+          <input 
+            placeholder="Pesquisar por placa ou prefixo..." 
+            className="bg-transparent border-none outline-none text-sm w-full font-medium"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
+          {['Todos', 'Carregados', 'Aguardando', 'Vazios', 'Em Manutenção'].map(label => (
+            <FilterChip 
+              key={label} 
+              label={label} 
+              active={filter === label} 
+              onClick={() => setFilter(label)}
+            />
+          ))}
+        </div>
       </div>
 
       {/* Fleet List Table */}
@@ -55,64 +179,45 @@ export const FleetStatusView: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-surface-container border-b border-outline-variant">
               <tr>
-                <th className="px-6 py-4 label-caps text-slate-500">Veículo</th>
-                <th className="px-6 py-4 label-caps text-slate-500">Status</th>
-                <th className="px-6 py-4 label-caps text-slate-500">Informações Logísticas</th>
-                <th className="px-6 py-4 label-caps text-slate-500">Horários</th>
-                <th className="px-6 py-4 text-right">AÇÕES</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-black text-[10px]">VEÍCULO</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-black text-[10px]">STATUS ATUAL</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-black text-[10px]">CLIENTE / ROTA</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-black text-[10px]">HORÁRIOS DA VIAGEM</th>
+                <th className="px-6 py-4 text-right text-[10px] uppercase font-black text-slate-500 pr-10">AÇÕES</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30">
-              <FleetRow 
-                plate="ABC-1234"
-                model="Scania R450 - Carreta"
-                status="CARREGADO"
-                statusStyle="bg-secondary-container text-primary-container"
-                client="J&T Express"
-                route="São Paulo/SP → Rio de Janeiro/RJ"
-                times={{ label1: 'Coleta', val1: '14/10 08:30', label2: 'Descarga', val2: '15/10 14:00' }}
-              />
-              <FleetRow 
-                plate="XYZ-5678"
-                model="Mercedes-Benz Actros - Truck"
-                status="AGUARDANDO"
-                statusStyle="bg-surface-container-high text-slate-600"
-                client="Mercado Livre"
-                route="Curitiba/PR → Porto Alegre/RS"
-                times={{ label1: 'Coleta', val1: '16/10 10:00', label2: 'Descarga', val2: 'Pendente' }}
-              />
-               <FleetRow 
-                plate="KLT-9012"
-                model="VW Delivery - HR"
-                status="VAZIO"
-                statusStyle="bg-primary-fixed text-primary-container"
-                location="Pátio Central - Guarulhos/SP"
-                times={{ label1: '', val1: 'Disponível para carregamento', label2: '', val2: '' }}
-                isVazio
-              />
-              <FleetRow 
-                plate="OFF-4040"
-                model="Volvo FH 540 - Carreta"
-                status="EM MANUTENÇÃO"
-                statusStyle="bg-error-container text-error"
-                location="Mecânica Diesel Irmãos Rocha"
-                times={{ label1: 'Entrada', val1: '12/10', label2: 'Previsão', val2: '16/10' }}
-                isManutencao
-              />
+              {filteredFleet.length > 0 ? (
+                filteredFleet.map(({ vehicle, latestShipment }) => (
+                  <FleetRow 
+                    key={vehicle.id}
+                    plate={vehicle.plate}
+                    model={vehicle.prefix || 'Caminhão'}
+                    status={latestShipment?.status || 'VAZIO'}
+                    client={latestShipment?.client}
+                    route={latestShipment?.route}
+                    driver={latestShipment?.driver}
+                    location={vehicle.address}
+                    collectionTime={latestShipment?.collectionTime}
+                    unloadingTime={latestShipment?.unloadingTime}
+                    onEdit={() => handleOpenModal(vehicle)}
+                    onDelete={() => handleDeleteVehicle(vehicle.id)}
+                  />
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400 font-bold">
+                    Nenhum veículo encontrado com os filtros selecionados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
         
-        {/* Pagination */}
+        {/* Pagination Info */}
         <div className="px-6 py-4 bg-white border-t border-outline-variant flex justify-between items-center">
-          <p className="text-xs text-slate-500 font-bold">Mostrando 4 de 124 veículos</p>
-          <div className="flex gap-2">
-            <button className="p-1 border border-outline-variant rounded hover:bg-slate-50 text-slate-400 disabled:opacity-50" disabled><ChevronLeft size={18}/></button>
-            <button className="px-3 py-1 border border-outline-variant rounded bg-primary-container text-white text-xs font-bold">1</button>
-            <button className="px-3 py-1 border border-outline-variant rounded hover:bg-slate-50 text-slate-600 text-xs font-bold">2</button>
-            <button className="px-3 py-1 border border-outline-variant rounded hover:bg-slate-50 text-slate-600 text-xs font-bold">3</button>
-            <button className="p-1 border border-outline-variant rounded hover:bg-slate-50 text-slate-400"><ChevronRight size={18}/></button>
-          </div>
+          <p className="text-xs text-slate-500 font-bold">Mostrando {filteredFleet.length} de {stats.total} veículos</p>
         </div>
       </div>
 
@@ -120,13 +225,10 @@ export const FleetStatusView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
         <div className="md:col-span-8 bg-white p-8 rounded-xl border border-outline-variant flex items-center justify-between shadow-sm relative overflow-hidden group hover:shadow-md transition-all">
           <div className="z-10 flex flex-col items-start h-full">
-            <h4 className="title-sm text-primary-container mb-2 font-bold">Performance da Frota</h4>
+            <h4 className="title-sm text-primary-container mb-2 font-bold uppercase tracking-tight">Performance da Frota</h4>
             <p className="text-sm text-slate-500 max-w-sm font-medium leading-relaxed">
-              94% dos veículos operando dentro do cronograma previsto. Atrasos detectados apenas na rota Rio-Santos devido a condições climáticas.
+              Monitoramento automatizado de SLA e eficiência de rotas. Dados obtidos em tempo real via telemetria.
             </p>
-            <button className="mt-8 px-6 py-2.5 bg-primary-container text-white rounded font-bold text-xs uppercase tracking-widest hover:opacity-90 transition-opacity">
-              Ver Detalhes das Rotas
-            </button>
           </div>
           <div className="z-10 flex gap-4 items-end pl-8">
             <ChartBar height="h-24" />
@@ -135,23 +237,118 @@ export const FleetStatusView: React.FC = () => {
             <ChartBar height="h-40" active />
             <ChartBar height="h-36" />
           </div>
-          {/* Aesthetic Overlay */}
           <div className="absolute right-0 top-0 h-full w-1/3 bg-gradient-to-l from-primary-container/10 to-transparent pointer-events-none" />
         </div>
 
         <div className="md:col-span-4 bg-primary-container p-8 rounded-xl flex flex-col justify-between shadow-lg text-white">
           <div>
             <ShieldCheck size={36} className="text-teal-400" />
-            <h4 className="title-sm mt-4 font-bold">Segurança 24h</h4>
+            <h4 className="title-sm mt-4 font-bold uppercase tracking-tight">Segurança Ativa</h4>
             <p className="text-sm opacity-80 mt-2 font-medium leading-relaxed">
-              Todos os rastreadores estão online e transmitindo sinais de telemetria.
+              Todos os dispositivos de rastreio estão operando normalmente. Protocolos de segurança reforçados.
             </p>
           </div>
           <div className="pt-6 border-t border-white/10 flex items-center justify-between mt-4">
-            <span className="data-mono text-[11px] opacity-60">Última checagem: Agora</span>
+            <span className="data-mono text-[11px] opacity-60">Sincronizado via Sascar</span>
             <span className="w-2.5 h-2.5 rounded-full bg-teal-400 shadow-[0_0_12px_rgba(45,212,191,0.8)] animate-pulse" />
           </div>
         </div>
+      </div>
+
+      {isModalOpen && (
+        <VehicleModal 
+          onClose={() => setIsModalOpen(false)} 
+          onSubmit={handleSaveVehicle}
+          initialData={editingVehicle}
+        />
+      )}
+    </div>
+  );
+};
+
+const VehicleModal: React.FC<{
+  onClose: () => void;
+  onSubmit: (data: Partial<FleetVehicle>) => void;
+  initialData: FleetVehicle | null;
+}> = ({ onClose, onSubmit, initialData }) => {
+  const [formData, setFormData] = useState<Partial<FleetVehicle>>(
+    initialData || {
+      plate: '',
+      prefix: '',
+      address: ''
+    }
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-primary-container/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
+        <div className="p-6 border-b border-outline-variant flex justify-between items-center bg-slate-50">
+          <div>
+            <h3 className="title-md font-black text-primary-container uppercase tracking-tight">
+              {initialData ? 'Editar Veículo' : 'Novo Veículo'}
+            </h3>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Gestão de Ativos da Frota</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+            <X size={20} className="text-slate-500" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <div className="space-y-1">
+            <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Placa</label>
+            <input 
+              required
+              placeholder="ABC-1234"
+              value={formData.plate}
+              onChange={e => setFormData({ ...formData, plate: e.target.value.toUpperCase() })}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-black text-primary-container uppercase tracking-widest"
+              maxLength={8}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Prefixo / Modelo</label>
+            <input 
+              placeholder="Ex: Scania R450"
+              value={formData.prefix}
+              onChange={e => setFormData({ ...formData, prefix: e.target.value })}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-bold"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Localização Base (Opcional)</label>
+            <input 
+              placeholder="Ex: Pátio Guarulhos"
+              value={formData.address}
+              onChange={e => setFormData({ ...formData, address: e.target.value })}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-bold"
+            />
+          </div>
+
+
+          <div className="pt-4 flex gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 border border-outline-variant text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-50"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              className="flex-1 px-4 py-3 bg-primary-container text-white rounded-xl font-black text-xs uppercase tracking-widest hover:opacity-90 shadow-lg shadow-primary-container/20"
+            >
+              Salvar Veículo
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -167,12 +364,14 @@ const StatMiniCard: React.FC<{ icon: React.ReactNode; label: string; value: stri
   </div>
 );
 
-const FilterChip: React.FC<{ label: string; active?: boolean }> = ({ label, active }) => (
-  <button className={cn(
-    "px-6 py-2 rounded-full font-bold text-xs whitespace-nowrap transition-all whitespace-nowrap",
+const FilterChip: React.FC<{ label: string; active?: boolean; onClick: () => void }> = ({ label, active, onClick }) => (
+  <button 
+    onClick={onClick}
+    className={cn(
+    "px-6 py-2 rounded-full font-black text-[10px] uppercase tracking-widest whitespace-nowrap transition-all",
     active 
       ? "bg-primary-container text-white shadow-lg shadow-primary-container/20" 
-      : "bg-white border border-outline-variant text-slate-600 hover:bg-slate-50"
+      : "bg-white border border-outline-variant text-slate-500 hover:bg-slate-50"
   )}>
     {label}
   </button>
@@ -182,72 +381,154 @@ const FleetRow: React.FC<{
   plate: string;
   model: string;
   status: string;
-  statusStyle: string;
   client?: string;
+  driver?: string;
   route?: string;
   location?: string;
-  times: { label1: string; val1: string; label2: string; val2: string };
-  isVazio?: boolean;
-  isManutencao?: boolean;
-}> = ({ plate, model, status, statusStyle, client, route, location, times, isVazio, isManutencao }) => (
-  <tr className="hover:bg-slate-50/50 transition-colors">
-    <td className="px-6 py-6">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-surface-container-low rounded-lg flex items-center justify-center border border-outline-variant/30">
-          <Truck size={20} className="text-slate-400" />
+  collectionTime?: string;
+  unloadingTime?: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}> = ({ plate, model, status, client, driver, route, location, collectionTime, unloadingTime, onEdit, onDelete }) => {
+  const getStatusStyles = (status: string) => {
+    switch (status) {
+      case 'EM TRÂNSITO':
+      case 'ENTREGA FINAL':
+        return "bg-red-500 text-white border-red-600 shadow-sm";
+      case 'CARREGANDO':
+        return "bg-red-500 text-white border-red-600 shadow-sm";
+      case 'AGUARDANDO':
+        return "bg-yellow-400 text-white border-yellow-500 shadow-sm";
+      case 'VAZIO':
+      case 'DISPONÍVEL':
+        return "bg-green-500 text-white border-green-600 shadow-sm";
+      case 'EM MANUTENÇÃO':
+        return "bg-slate-400 text-white border-slate-500";
+      default:
+        return "bg-slate-200 text-slate-600 border-slate-300";
+    }
+  };
+
+  const getRowStyles = (status: string) => {
+    switch (status) {
+      case 'EM TRÂNSITO':
+      case 'ENTREGA FINAL':
+      case 'CARREGANDO':
+        return "bg-red-500 hover:bg-red-600 text-white shadow-lg transition-all border-red-400/30";
+      case 'AGUARDANDO':
+        return "bg-yellow-400 hover:bg-yellow-500 text-white shadow-lg transition-all border-yellow-300/30";
+      case 'VAZIO':
+      case 'DISPONÍVEL':
+        return "bg-emerald-400 hover:bg-emerald-500 text-white shadow-lg transition-all border-emerald-300/30";
+      case 'EM MANUTENÇÃO':
+        return "bg-slate-400 hover:bg-slate-500 text-white border-slate-300/30";
+      default:
+        return "hover:bg-slate-50 transition-all border-outline-variant/30";
+    }
+  };
+
+  const getIconStyles = (status: string) => {
+    const isColored = ['EM TRÂNSITO', 'ENTREGA FINAL', 'CARREGANDO', 'AGUARDANDO', 'VAZIO', 'DISPONÍVEL', 'EM MANUTENÇÃO'].includes(status);
+    if (isColored) return "bg-white/20 border-white/40 text-white";
+    return "bg-surface-container-low border-outline-variant text-slate-400";
+  };
+
+  const getSubtextStyles = (status: string) => {
+    const isColored = ['EM TRÂNSITO', 'ENTREGA FINAL', 'CARREGANDO', 'AGUARDANDO', 'VAZIO', 'DISPONÍVEL', 'EM MANUTENÇÃO'].includes(status);
+    return isColored ? "text-white/80" : "text-slate-500";
+  };
+
+  const getMainTextStyles = (status: string) => {
+    const isColored = ['EM TRÂNSITO', 'ENTREGA FINAL', 'CARREGANDO', 'AGUARDANDO', 'VAZIO', 'DISPONÍVEL', 'EM MANUTENÇÃO'].includes(status);
+    return isColored ? "text-white font-black" : "text-primary-container font-black";
+  };
+
+  return (
+    <tr className={cn("transition-all duration-300 group border-b", getRowStyles(status))}>
+      <td className="px-6 py-6">
+        <div className="flex items-center gap-4">
+          <div className={cn(
+            "w-14 h-14 rounded-xl flex items-center justify-center border-2 transition-all shadow-sm",
+            getIconStyles(status)
+          )}>
+            <Truck size={24} />
+          </div>
+          <div>
+            <p className={cn("text-base tracking-tighter", getMainTextStyles(status))}>{plate}</p>
+            <p className={cn("text-[10px] uppercase tracking-widest", getSubtextStyles(status))}>{model}</p>
+          </div>
         </div>
-        <div>
-          <p className="data-mono text-primary-container font-black">{plate}</p>
-          <p className="text-[12px] text-slate-500 font-medium">{model}</p>
+      </td>
+      <td className="px-6 py-6 font-black">
+        <span className={cn(
+          "px-4 py-1.5 rounded-lg font-black text-[10px] tracking-widest border border-white/30 uppercase shadow-sm inline-block bg-white/10",
+        )}>
+          {status}
+        </span>
+      </td>
+      <td className="px-6 py-6">
+        <div className="flex flex-col gap-1.5">
+          {client ? (
+            <div className="space-y-1">
+              <p className={cn("text-[11px] flex items-center gap-2 uppercase tracking-tight", getMainTextStyles(status))}>
+                <Building2 size={12} className={cn(getSubtextStyles(status))} /> {client}
+              </p>
+              {driver && (
+                <p className={cn("text-[10px] font-bold flex items-center gap-2", getSubtextStyles(status))}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
+                  Motorista: {driver}
+                </p>
+              )}
+            </div>
+          ) : (
+             <p className={cn("text-[9px] font-black uppercase tracking-widest", getSubtextStyles(status))}>VEÍCULO DISPONÍVEL</p>
+          )}
+          <p className={cn("text-[11px] flex items-center gap-2 font-bold", getSubtextStyles(status))}>
+            <MapPin size={12} className={cn(getSubtextStyles(status))} /> {route || location || 'Localização não informada'}
+          </p>
         </div>
-      </div>
-    </td>
-    <td className="px-6 py-6">
-      <span className={cn(
-        "px-3 py-1 rounded-full font-black text-[10px] tracking-widest border border-current/10",
-        statusStyle
-      )}>
-        {status}
-      </span>
-    </td>
-    <td className="px-6 py-6">
-      <div className="flex flex-col gap-1.5">
-        {client ? (
-          <p className="text-sm font-bold text-primary-container flex items-center gap-2">
-            <Building2 size={14} className="text-slate-400" /> {client}
-          </p>
-        ) : (
-           <p className="label-caps !text-[9px] text-slate-400">{isVazio ? 'LOCALIZAÇÃO ATUAL' : 'OFICINA / LOCAL'}</p>
-        )}
-        <p className="text-xs text-slate-500 flex items-center gap-2 font-medium">
-          <MapPin size={14} className="text-slate-300" /> {route || location}
-        </p>
-      </div>
-    </td>
-    <td className="px-6 py-6 font-mono">
-      <div className="space-y-1">
-        <p className="text-[11px] text-slate-500">
-           <span className="font-black text-primary-container uppercase min-w-[60px] inline-block">{times.label1}:</span> {times.val1}
-        </p>
-        {times.val2 && (
-          <p className="text-[11px] text-slate-500">
-            <span className="font-black text-primary-container uppercase min-w-[60px] inline-block">{times.label2}:</span> {times.val2}
-          </p>
-        )}
-      </div>
-    </td>
-    <td className="px-6 py-6 text-right">
-      <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400 hover:text-primary-container transition-colors">
-        <MoreVertical size={18} />
-      </button>
-    </td>
-  </tr>
-);
+      </td>
+      <td className="px-6 py-6">
+        <div className="space-y-1.5 flex flex-col font-black">
+          <div className="flex items-center gap-2">
+            <span className={cn("text-[9px] uppercase tracking-widest min-w-[50px]", getSubtextStyles(status))}>Coleta:</span>
+            <span className={cn("text-[11px]", getMainTextStyles(status))}>
+              {collectionTime ? new Date(collectionTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={cn("text-[9px] uppercase tracking-widest min-w-[50px]", getSubtextStyles(status))}>Descarga:</span>
+            <span className={cn("text-[11px]", getMainTextStyles(status))}>
+              {unloadingTime ? new Date(unloadingTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---'}
+            </span>
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6 text-right pr-6">
+        <div className="flex items-center justify-end gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+          <button 
+            onClick={onEdit}
+            className="p-2 hover:bg-white/20 rounded-full text-white/70 hover:text-white transition-colors"
+          >
+            <Edit2 size={16} />
+          </button>
+          <button 
+            onClick={onDelete}
+            className="p-2 hover:bg-white/20 rounded-full text-white/70 hover:text-white transition-colors"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 const ChartBar: React.FC<{ height: string; active?: boolean }> = ({ height, active }) => (
   <div className={cn(
-    "w-8 rounded-t-sm transition-all duration-500",
+    "w-8 rounded-t-lg transition-all duration-500",
     height,
     active ? "bg-primary-container shadow-[0_0_15px_rgba(13,61,61,0.3)]" : "bg-secondary-container"
   )} />
 );
+

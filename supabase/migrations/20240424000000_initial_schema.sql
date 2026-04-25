@@ -30,14 +30,16 @@ CREATE TABLE public.vehicles (
   last_update TIMESTAMP WITH TIME ZONE,
   ignition BOOLEAN DEFAULT false,
   address TEXT,
+  category TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
 );
 
 -- Create shipments table
 CREATE TABLE public.shipments (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  id TEXT PRIMARY KEY,
   vehicle_id UUID REFERENCES public.vehicles(id) ON DELETE SET NULL,
   vehicle_name TEXT, -- Fallback name or specific vehicle description
+  driver TEXT,       -- Added driver column
   plate TEXT,        -- Denormalized plate for easier queries
   route TEXT,
   status shipment_status DEFAULT 'AGUARDANDO',
@@ -45,6 +47,8 @@ CREATE TABLE public.shipments (
   client TEXT,
   start_time TIMESTAMP WITH TIME ZONE,
   estimated_arrival TIMESTAMP WITH TIME ZONE,
+  collection_time TIMESTAMP WITH TIME ZONE, -- Added collection column
+  unloading_time TIMESTAMP WITH TIME ZONE,  -- Added unloading column
   last_update TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
   created_by UUID REFERENCES auth.users ON DELETE SET NULL

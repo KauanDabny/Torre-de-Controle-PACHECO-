@@ -12,7 +12,8 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => Promise<{ error: any }>;
+  login: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, metadata: any) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
   loading: boolean;
@@ -62,13 +63,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const login = async (email: string) => {
-    // Using passwordless magic link as a simple example, or you could use signInWithPassword
-    const { error } = await supabase.auth.signInWithOtp({
+  const login = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
       email,
+      password,
+    });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string, metadata: any) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
-        emailRedirectTo: window.location.origin,
-      },
+        data: metadata
+      }
     });
     return { error };
   };
@@ -79,7 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, signUp, logout, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );

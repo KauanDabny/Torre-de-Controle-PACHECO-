@@ -8,7 +8,7 @@ interface GoogleMapProps {
 
 export const GoogleMap: React.FC<GoogleMapProps> = ({ className }) => {
   const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-  const center = { lat: -14.235, lng: -51.9253 }; // Centered on Brazil
+  const center = { lat: -23.5062, lng: -46.8762 }; // Barueri, SP
 
   if (!apiKey) {
     return (
