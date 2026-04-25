@@ -1,15 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
 const rawUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const supabaseUrl = rawUrl.trim().replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
 const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase credentials not found. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.');
-}
+const isPlaceholder = !supabaseUrl || supabaseUrl.includes('placeholder') || !supabaseAnonKey || supabaseAnonKey.includes('placeholder');
 
-if (supabaseAnonKey && !supabaseAnonKey.startsWith('eyJ')) {
-  console.error('A VITE_SUPABASE_ANON_KEY parece ser inválida. Certifique-se de que é a chave "anon" "public" do painel do Supabase (ela deve começar com "eyJ").');
+if (!isPlaceholder && !supabaseAnonKey.startsWith('eyJ')) {
+  console.warn('A VITE_SUPABASE_ANON_KEY configurada pode estar incorreta. Chaves do Supabase geralmente começam com "eyJ". Verifique se você copiou a chave "anon" "public" corretamente.');
 }
 
 export const supabase = createClient(
