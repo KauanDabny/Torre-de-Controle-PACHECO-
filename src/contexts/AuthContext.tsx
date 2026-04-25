@@ -27,12 +27,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check active sessions and subscribe to auth changes
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        mapSupabaseUserToUser(session.user);
-      }
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session) {
+          mapSupabaseUserToUser(session.user);
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching session:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
@@ -47,39 +53,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const mapSupabaseUserToUser = async (sbUser: SupabaseUser) => {
-    // Try to get profile from profiles table
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', sbUser.id)
-      .single();
+    try {
+      // Try to get profile from profiles table
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', sbUser.id)
+        .single();
 
-    setUser({
-      id: sbUser.id,
-      name: profile?.full_name || sbUser.user_metadata?.full_name || 'Usuário Supabase',
-      role: profile?.role || 'operator',
-      email: sbUser.email || '',
-      avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
-    });
+      setUser({
+        id: sbUser.id,
+        name: profile?.full_name || sbUser.user_metadata?.full_name || 'Usuário Supabase',
+        role: profile?.role || 'operator',
+        email: sbUser.email || '',
+        avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
+      });
+    } catch (error) {
+      console.error('Error mapping user:', error);
+      // Fallback user state even if DB fetch fails
+      setUser({
+        id: sbUser.id,
+        name: sbUser.user_metadata?.full_name || 'Usuário Supabase',
+        role: 'operator',
+        email: sbUser.email || '',
+        avatar: sbUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
+      });
+    }
   };
 
   const login = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      return { error };
+    } catch (err: any) {
+      console.error('Login error:', err);
+      return { error: err };
+    }
   };
 
   const signUp = async (email: string, password: string, metadata: any) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata
-      }
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: metadata
+        }
+      });
+      return { error };
+    } catch (err: any) {
+      console.error('SignUp error:', err);
+      return { error: err };
+    }
   };
 
   const logout = async () => {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Truck, ShieldCheck, ArrowRight, Loader2, MailCheck } from 'lucide-react';
+import { Truck, ShieldCheck, ArrowRight, Loader2, MailCheck, AlertTriangle } from 'lucide-react';
+import { isPlaceholder } from '../lib/supabase';
 
 export const LoginView: React.FC = () => {
   const { login, signUp } = useAuth();
@@ -63,6 +64,18 @@ export const LoginView: React.FC = () => {
             </h2>
             <p className="text-slate-500 text-sm font-medium">Hub Logístico TransPacheco</p>
           </div>
+
+          {isPlaceholder && (
+            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="text-amber-500 flex-shrink-0" size={20} />
+              <div className="space-y-1">
+                <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Ambiente não configurado</p>
+                <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
+                  Para acessar o sistema, é necessário configurar as variáveis <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> e <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> nas configurações.
+                </p>
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {isSignUp && (
