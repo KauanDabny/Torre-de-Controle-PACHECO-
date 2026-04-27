@@ -12,6 +12,7 @@ export const LoginView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) return;
@@ -141,6 +142,8 @@ export const LoginView: React.FC = () => {
                 </>
               )}
             </button>
+
+
           </form>
 
           <div className="mt-8 text-center">

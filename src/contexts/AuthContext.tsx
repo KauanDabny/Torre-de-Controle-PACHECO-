@@ -13,6 +13,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ error: any }>;
+  loginWithGoogle: () => Promise<{ error: any }>;
   signUp: (email: string, password: string, metadata: any) => Promise<{ error: any }>;
   logout: () => Promise<void>;
   isAuthenticated: boolean;
@@ -31,6 +32,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(({ data: { session } }) => {
         if (session) {
           mapSupabaseUserToUser(session.user);
+        } else {
+          // Temporary guest user for bypass
+          setUser({
+            id: 'guest-id',
+            name: 'Visitante (Torre)',
+            role: 'admin',
+            email: 'guest@transpacheco.com',
+            avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
+          });
         }
       })
       .catch(err => {
@@ -44,7 +54,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session) {
         mapSupabaseUserToUser(session.user);
       } else {
-        setUser(null);
+        // Temporary guest user for bypass
+        setUser({
+          id: 'guest-id',
+          name: 'Visitante (Torre)',
+          role: 'admin',
+          email: 'guest@transpacheco.com',
+          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
+        });
       }
       setLoading(false);
     });
@@ -94,6 +111,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const loginWithGoogle = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        }
+      });
+      return { error };
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      return { error: err };
+    }
+  };
+
   const signUp = async (email: string, password: string, metadata: any) => {
     try {
       const { error } = await supabase.auth.signUp({
@@ -116,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signUp, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, loginWithGoogle, signUp, logout, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );
