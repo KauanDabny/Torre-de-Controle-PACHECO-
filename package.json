@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "start": "node server.ts",
-    "build": "vite build",
+    "start": "node dist/server.js",
+    "build": "vite build && esbuild server.ts --bundle --platform=node --target=node22 --format=esm --outfile=dist/server.js --packages=external",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
   },
@@ -21,6 +21,7 @@
     "azure-maps-control": "^3.7.4",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "esbuild": "^0.28.0",
     "express": "^4.22.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.546.0",

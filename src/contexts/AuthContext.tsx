@@ -32,15 +32,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(({ data: { session } }) => {
         if (session) {
           mapSupabaseUserToUser(session.user);
-        } else {
-          // Temporary guest user for bypass
-          setUser({
-            id: 'guest-id',
-            name: 'Visitante (Torre)',
-            role: 'admin',
-            email: 'guest@transpacheco.com',
-            avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
-          });
         }
       })
       .catch(err => {
@@ -54,14 +45,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (session) {
         mapSupabaseUserToUser(session.user);
       } else {
-        // Temporary guest user for bypass
-        setUser({
-          id: 'guest-id',
-          name: 'Visitante (Torre)',
-          role: 'admin',
-          email: 'guest@transpacheco.com',
-          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
-        });
+        setUser(null);
       }
       setLoading(false);
     });
