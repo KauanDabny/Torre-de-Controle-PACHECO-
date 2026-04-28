@@ -66,8 +66,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-primary-container leading-tight">Pacheco</h1>
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Logística</p>
+              <h1 className="text-lg font-bold text-primary-container leading-tight">Torre De</h1>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Controle</p>
             </div>
           </div>
           {/* Mobile Close Button */}

@@ -53,7 +53,7 @@ export const LoginView: React.FC = () => {
             <div className="flex items-center justify-center mb-6">
               <img 
                 src="https://transportadorapacheco.com/logo.png" 
-                alt="Transportadora Pacheco" 
+                alt="Torre De Controle" 
                 className="h-32 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.src = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=200&h=200&fit=crop";
@@ -63,7 +63,7 @@ export const LoginView: React.FC = () => {
             <h2 className="display-lg text-primary-container tracking-tighter">
               {isSignUp ? 'Criar Conta' : 'Login'}
             </h2>
-            <p className="text-slate-500 text-sm font-medium">Hub Logístico TransPacheco</p>
+            <p className="text-slate-500 text-sm font-medium">Torre De Controle</p>
           </div>
 
           {isPlaceholder && (

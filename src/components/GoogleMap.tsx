@@ -35,7 +35,7 @@ export const GoogleMap: React.FC<GoogleMapProps> = ({ className }) => {
                 <p className="text-[12px] text-slate-500 leading-relaxed">
                     O Google Maps requer uma chave de API para funcionar plenamente. 
                     <br/><br/>
-                    Por favor, adicione a variável <code className="bg-slate-100 px-1 rounded font-mono text-primary-container">VITE_GOOGLE_MAPS_API_KEY</code> nos Secrets do AI Studio para habilitar o mapa interativo do TransPacheco.
+                    Por favor, adicione a variável <code className="bg-slate-100 px-1 rounded font-mono text-primary-container">VITE_GOOGLE_MAPS_API_KEY</code> nos Secrets do AI Studio para habilitar o mapa interativo do Torre De Controle.
                 </p>
             </div>
         </div>

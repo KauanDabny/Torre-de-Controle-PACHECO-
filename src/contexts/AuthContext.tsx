@@ -29,13 +29,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Check active sessions and subscribe to auth changes
     supabase.auth.getSession()
-      .then(({ data: { session } }) => {
+      .then(({ data: { session }, error }) => {
+        if (error) throw error;
         if (session) {
           mapSupabaseUserToUser(session.user);
         }
       })
       .catch(err => {
         console.error('Error fetching session:', err);
+        // If there's a problem with the refresh token, clear everything
+        if (err.message && (err.message.includes('Refresh Token') || err.message.includes('refresh_token'))) {
+          supabase.auth.signOut();
+        }
       })
       .finally(() => {
         setLoading(false);

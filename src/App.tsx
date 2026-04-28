@@ -83,7 +83,7 @@ function AppContent() {
         <button className="fixed bottom-8 right-8 bg-primary-container text-white p-4 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all z-50 flex items-center gap-2 group">
           <Headphones size={20} />
           <span className="text-sm font-bold pr-2 max-w-0 group-hover:max-w-xs overflow-hidden transition-all duration-300">
-            Torre de Controle
+            Torre De Controle
           </span>
         </button>
       </main>

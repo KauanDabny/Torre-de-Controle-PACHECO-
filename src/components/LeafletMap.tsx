@@ -50,7 +50,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({ className, vehicles = []
         <Marker position={barueriPos}>
           <Popup className="custom-popup">
             <div className="p-2 text-center">
-              <p className="font-black text-primary-container text-xs uppercase tracking-widest">Matriz TransPacheco</p>
+              <p className="font-black text-primary-container text-xs uppercase tracking-widest">Matriz Torre De Controle</p>
               <p className="text-[10px] text-slate-500 mt-1">Barueri - SP</p>
             </div>
           </Popup>
