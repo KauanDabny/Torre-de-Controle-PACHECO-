@@ -66,8 +66,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-primary-container leading-tight">Torre De</h1>
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Controle</p>
+              <h1 className="text-lg font-bold text-primary-container leading-tight">Pacheco</h1>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold leading-none">Logística</p>
             </div>
           </div>
           {/* Mobile Close Button */}
@@ -98,11 +98,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
       </nav>
 
       <div className="mt-auto pt-6 space-y-1">
-        <div className="px-3 py-3 mb-6 bg-slate-50 rounded-xl border border-outline-variant/50">
+        <button 
+          onClick={() => onViewChange('profile')}
+          className="w-full text-left px-3 py-3 mb-6 bg-slate-50 rounded-xl border border-outline-variant/50 hover:border-primary-container/30 transition-all group"
+        >
           <div className="flex items-center gap-3">
              <img 
               src={user?.avatar}
-              className="w-8 h-8 rounded-full border border-outline-variant"
+              className="w-8 h-8 rounded-full border border-outline-variant group-hover:ring-2 group-hover:ring-primary-container/20 transition-all"
               alt="Avatar"
             />
             <div className="overflow-hidden">
@@ -110,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
               <p className="text-[10px] text-slate-400 font-medium truncate">{user?.role}</p>
             </div>
           </div>
-        </div>
+        </button>
 
         <button 
           onClick={() => onViewChange('shipments')}
@@ -120,7 +123,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeView, onViewChange, isOp
           Novo Envio
         </button>
         
-        <button className="w-full flex items-center gap-3 px-3 py-2 text-slate-500 hover:text-primary-container transition-colors">
+        <button 
+          onClick={() => onViewChange('settings')}
+          className={cn(
+            "w-full flex items-center gap-3 px-3 py-2 transition-colors",
+            activeView === 'profile' || activeView === 'settings' ? "text-primary-container font-bold" : "text-slate-500 hover:text-primary-container"
+          )}
+        >
           <Settings size={20} />
           <span className="text-sm">Configurações</span>
         </button>

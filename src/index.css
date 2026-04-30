@@ -38,6 +38,33 @@
   --radius-xl: 0.75rem;
 }
 
+@variant dark (&:where(.dark, .dark *));
+
+.dark {
+  --color-surface: #0a0e0e;
+  --color-surface-dim: #050707;
+  --color-surface-bright: #121818;
+  --color-surface-container-lowest: #050707;
+  --color-surface-container-low: #0f1414;
+  --color-surface-container: #151b1b;
+  --color-surface-container-high: #1a2222;
+  --color-surface-container-highest: #202a2a;
+  --color-on-surface: #e1e3e3;
+  --color-on-surface-variant: #bfc8c7;
+  --color-inverse-surface: #e1e3e3;
+  --color-inverse-on-surface: #2d3131;
+  --color-outline: #899392;
+  --color-outline-variant: #404848;
+  --color-primary: #80d4d2;
+  --color-on-primary: #003737;
+  --color-primary-container: #00504f;
+  --color-on-primary-container: #9cf1ef;
+  --color-secondary: #bfc8c7;
+  --color-on-secondary: #283333;
+  --color-secondary-container: #3f4949;
+  --color-on-secondary-container: #dce4e3;
+}
+
 @layer base {
   body {
     @apply bg-surface text-on-surface font-sans antialiased;
@@ -63,4 +90,98 @@
 
 .title-sm {
   @apply text-[18px] font-semibold leading-6;
+}
+
+div:fullscreen {
+  background-color: #f8fafc;
+  padding: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+div:fullscreen .bg-white {
+  background-color: transparent !important;
+}
+
+div:fullscreen .border, 
+div:fullscreen .rounded-xl {
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+div:fullscreen table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  table-layout: fixed;
+}
+
+div:fullscreen thead {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background-color: white;
+}
+
+div:fullscreen .overflow-y-auto {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+/* Fluid Typography for big screens - refined for compactness */
+div:fullscreen .text-xl { font-size: clamp(1.2rem, 2vw, 2.8rem) !important; line-height: 1 !important; }
+div:fullscreen .text-2xl { font-size: clamp(1.6rem, 2.8vw, 3.8rem) !important; line-height: 1 !important; }
+div:fullscreen .text-sm { font-size: clamp(0.9rem, 1.3vw, 1.6rem) !important; line-height: 1.2 !important; }
+div:fullscreen .text-xs { font-size: clamp(0.7rem, 1.1vw, 1.3rem) !important; line-height: 1.2 !important; }
+div:fullscreen .text-\[10px\] { font-size: clamp(0.5rem, 0.9vw, 1.1rem) !important; }
+div:fullscreen .text-lg { font-size: clamp(1.1rem, 1.8vw, 2.2rem) !important; }
+
+/* Icon sizing in fullscreen */
+div:fullscreen svg {
+  width: clamp(1.2rem, 1.8vw, 2.2rem) !important;
+  height: clamp(1.2rem, 1.8vw, 2.2rem) !important;
+}
+
+/* Hide Actions column in display mode */
+div:fullscreen th:last-child,
+div:fullscreen td:last-child {
+  display: none !important;
+}
+
+/* Increase Row Height and Padding - Adjusted for compactness */
+div:fullscreen .px-6 {
+  padding-left: clamp(0.8rem, 1.8vw, 2.5rem) !important;
+  padding-right: clamp(0.8rem, 1.8vw, 2.5rem) !important;
+}
+
+div:fullscreen .py-6 {
+  padding-top: clamp(0.5rem, 1.5vw, 2rem) !important;
+  padding-bottom: clamp(0.5rem, 1.5vw, 2rem) !important;
+}
+
+div:fullscreen .w-12.h-12 {
+  width: clamp(2.5rem, 4vw, 4rem) !important;
+  height: clamp(2.5rem, 4vw, 4rem) !important;
+}
+
+div:fullscreen .w-2.h-2 {
+  width: clamp(0.4rem, 0.8vw, 0.8rem) !important;
+  height: clamp(0.4rem, 0.8vw, 0.8rem) !important;
+}
+
+div:fullscreen thead tr {
+  height: clamp(40px, 6vw, 60px);
+}
+
+div:fullscreen thead th {
+  font-size: clamp(0.9rem, 1.2vw, 1.5rem) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* Adjust layout spacing for better fit */
+div:fullscreen .flex.gap-8 {
+  gap: clamp(1rem, 2vw, 3rem) !important;
 }

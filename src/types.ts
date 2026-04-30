@@ -27,4 +27,10 @@ export interface FleetVehicle {
   lastUpdate: string;
   ignition: boolean;
   address: string;
+  category?: string;
+}
+
+export interface Driver {
+  id: string;
+  name: string;
 }

@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentProvider } from './contexts/ShipmentContext';
 import { Headphones, Loader2 } from 'lucide-react';
 import { ShipmentsView } from './components/ShipmentsView';
+import { ProfileView } from './components/ProfileView';
 import { Toaster } from 'react-hot-toast';
 
 function AppContent() {
@@ -25,6 +26,8 @@ function AppContent() {
       case 'performance': return 'Painel de Performance';
       case 'shipments': return 'Gestão de Envios';
       case 'reports': return 'Relatórios e BI';
+      case 'profile':
+      case 'settings': return 'Perfil e Configurações';
       default: return 'Portal Logístico';
     }
   };
@@ -36,6 +39,8 @@ function AppContent() {
       case 'fleet': return <FleetStatusView />;
       case 'performance': return <PerformanceView />;
       case 'shipments': return <ShipmentsView />;
+      case 'profile':
+      case 'settings': return <ProfileView />;
       default: return (
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-64px)] text-slate-400 p-8">
           <div className="max-w-md w-full bg-white border border-outline-variant rounded-xl shadow-sm text-center p-12">
@@ -73,6 +78,7 @@ function AppContent() {
         <Topbar 
           viewTitle={getViewTitle()} 
           onMenuToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+          onViewChange={setActiveView}
         />
         
         <div className="animate-in fade-in duration-500 overflow-x-hidden">
@@ -83,7 +89,7 @@ function AppContent() {
         <button className="fixed bottom-8 right-8 bg-primary-container text-white p-4 rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all z-50 flex items-center gap-2 group">
           <Headphones size={20} />
           <span className="text-sm font-bold pr-2 max-w-0 group-hover:max-w-xs overflow-hidden transition-all duration-300">
-            Torre De Controle
+            Torre de Controle
           </span>
         </button>
       </main>

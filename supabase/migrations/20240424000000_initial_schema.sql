@@ -83,7 +83,21 @@ CREATE POLICY "Shipments are viewable by authenticated users." ON public.shipmen
 CREATE POLICY "Only authenticated users can manage shipments." ON public.shipments
   FOR ALL TO authenticated USING (true);
 
--- Function to handle new user creation
+-- Create drivers table
+CREATE TABLE public.drivers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+-- Drivers policies
+ALTER TABLE public.drivers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Drivers are viewable by authenticated users." ON public.drivers
+  FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Only authenticated users can manage drivers." ON public.drivers
+  FOR ALL TO authenticated USING (true);
+
+-- Functions to handle...
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Truck, ShieldCheck, ArrowRight, Loader2, MailCheck, AlertTriangle } from 'lucide-react';
-import { isPlaceholder } from '../lib/supabase';
+import { Truck, ShieldCheck, ArrowRight, Loader2, MailCheck, AlertCircle } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 export const LoginView: React.FC = () => {
   const { login, signUp } = useAuth();
@@ -11,7 +11,6 @@ export const LoginView: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +33,11 @@ export const LoginView: React.FC = () => {
       } else {
         const { error } = await login(email, password);
         if (error) {
-          setError(error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos' : error.message);
+          let message = error.message;
+          if (message === 'Invalid login credentials') message = 'E-mail ou senha incorretos';
+          if (message.includes('Email not confirmed')) message = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+          if (message.includes('User not found')) message = 'Usuário não encontrado em nossa base.';
+          setError(message);
         }
       }
     } catch (err: any) {
@@ -53,7 +56,7 @@ export const LoginView: React.FC = () => {
             <div className="flex items-center justify-center mb-6">
               <img 
                 src="https://transportadorapacheco.com/logo.png" 
-                alt="Torre De Controle" 
+                alt="Transportadora Pacheco" 
                 className="h-32 w-auto object-contain"
                 onError={(e) => {
                   e.currentTarget.src = "https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=200&h=200&fit=crop";
@@ -63,22 +66,22 @@ export const LoginView: React.FC = () => {
             <h2 className="display-lg text-primary-container tracking-tighter">
               {isSignUp ? 'Criar Conta' : 'Login'}
             </h2>
-            <p className="text-slate-500 text-sm font-medium">Torre De Controle</p>
+            <p className="text-slate-500 text-sm font-medium">Hub Logístico TransPacheco</p>
           </div>
 
-          {isPlaceholder && (
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
-              <AlertTriangle className="text-amber-500 flex-shrink-0" size={20} />
-              <div className="space-y-1">
-                <p className="text-xs font-black text-amber-900 uppercase tracking-tight">Ambiente não configurado</p>
-                <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
-                  Para acessar o sistema, é necessário configurar as variáveis <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_URL</code> e <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_ANON_KEY</code> nas configurações.
-                </p>
-              </div>
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!isSupabaseConfigured && (
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
+                <AlertCircle className="text-amber-500 shrink-0 mt-0.5" size={18} />
+                <div>
+                  <p className="text-amber-800 text-xs font-bold uppercase tracking-wider mb-1">Configuração Necessária</p>
+                  <p className="text-amber-700 text-[11px] leading-relaxed">
+                    O Supabase não foi configurado. Configure <b>VITE_SUPABASE_URL</b> e <b>VITE_SUPABASE_ANON_KEY</b> nos segredos do projeto.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {isSignUp && (
               <div className="space-y-2">
                 <label className="text-[11px] font-black uppercase tracking-widest text-slate-400 ml-1">
@@ -142,8 +145,6 @@ export const LoginView: React.FC = () => {
                 </>
               )}
             </button>
-
-
           </form>
 
           <div className="mt-8 text-center">

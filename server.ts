@@ -111,13 +111,9 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = process.env.NODE_ENV === "production" 
-      ? (__dirname.endsWith('dist') ? __dirname : path.join(process.cwd(), 'dist'))
-      : path.join(process.cwd(), 'dist');
-    
+    const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
-      // For Express 4
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

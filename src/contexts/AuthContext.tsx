@@ -13,9 +13,9 @@ interface User {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ error: any }>;
-  loginWithGoogle: () => Promise<{ error: any }>;
   signUp: (email: string, password: string, metadata: any) => Promise<{ error: any }>;
   logout: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<{ error: any }>;
   isAuthenticated: boolean;
   loading: boolean;
 }
@@ -28,23 +28,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     // Check active sessions and subscribe to auth changes
-    supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
-        if (error) throw error;
-        if (session) {
-          mapSupabaseUserToUser(session.user);
-        }
-      })
-      .catch(err => {
-        console.error('Error fetching session:', err);
-        // If there's a problem with the refresh token, clear everything
-        if (err.message && (err.message.includes('Refresh Token') || err.message.includes('refresh_token'))) {
-          supabase.auth.signOut();
-        }
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        mapSupabaseUserToUser(session.user);
+      }
+      setLoading(false);
+    });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
@@ -61,11 +50,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const mapSupabaseUserToUser = async (sbUser: SupabaseUser) => {
     try {
       // Try to get profile from profiles table
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', sbUser.id)
         .single();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" for .single()
+         console.warn('Error fetching profile:', error);
+      }
 
       setUser({
         id: sbUser.id,
@@ -74,9 +67,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: sbUser.email || '',
         avatar: profile?.avatar_url || sbUser.user_metadata?.avatar_url || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&h=100&fit=crop'
       });
-    } catch (error) {
-      console.error('Error mapping user:', error);
-      // Fallback user state even if DB fetch fails
+    } catch (err) {
+      console.error('Failed to map user profile:', err);
+      // Fallback to basic user info
       setUser({
         id: sbUser.id,
         name: sbUser.user_metadata?.full_name || 'Usuário Supabase',
@@ -88,47 +81,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      return { error };
-    } catch (err: any) {
-      console.error('Login error:', err);
-      return { error: err };
-    }
-  };
-
-  const loginWithGoogle = async () => {
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-        }
-      });
-      return { error };
-    } catch (err: any) {
-      console.error('Google login error:', err);
-      return { error: err };
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { error };
   };
 
   const signUp = async (email: string, password: string, metadata: any) => {
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: metadata
-        }
-      });
-      return { error };
-    } catch (err: any) {
-      console.error('SignUp error:', err);
-      return { error: err };
-    }
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: metadata
+      }
+    });
+    return { error };
   };
 
   const logout = async () => {
@@ -136,8 +104,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
+  const updateProfile = async (updates: Partial<User>) => {
+    if (!user) return { error: 'Not logged in' };
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          full_name: updates.name,
+          avatar_url: updates.avatar,
+          role: updates.role,
+          updated_at: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+
+      // Update local state
+      setUser(prev => prev ? { ...prev, ...updates } : null);
+      
+      return { error: null };
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      return { error };
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, loginWithGoogle, signUp, logout, isAuthenticated: !!user, loading }}>
+    <AuthContext.Provider value={{ user, login, signUp, logout, updateProfile, isAuthenticated: !!user, loading }}>
       {children}
     </AuthContext.Provider>
   );

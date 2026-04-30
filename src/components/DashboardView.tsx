@@ -11,15 +11,16 @@ import {
   MoreVertical,
   ArrowRight,
   QrCode,
-  ShieldCheck
+  ShieldCheck,
+  User as UserIcon
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { LeafletMap } from './LeafletMap'; 
-
+import { FleetMapView } from './FleetMapView';
 import { useShipments } from '../contexts/ShipmentContext';
+import { RefreshCw } from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
-  const { shipments, vehicles } = useShipments();
+  const { shipments, vehicles, syncSascar, loading } = useShipments();
   
   // KPI Calculations
   const totalActive = shipments.length;
@@ -96,17 +97,21 @@ export const DashboardView: React.FC = () => {
               <MapIcon size={18} className="text-primary-container" />
               <h4 className="title-sm text-primary-container">Monitoramento da Frota em Tempo Real</h4>
             </div>
+            <button 
+              onClick={syncSascar}
+              disabled={loading}
+              className={cn(
+                "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm",
+                loading && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <RefreshCw size={14} className={cn(loading && "animate-spin")} />
+              {loading ? 'Sincronizando...' : 'Sincronizar Sascar'}
+            </button>
           </div>
           <div className="flex-1 relative overflow-hidden bg-slate-100">
-            {/* Interactive Leaflet Map (Ready to use) */}
-            <LeafletMap className="w-full h-full" vehicles={vehicles} />
-            
-            {/* Floating Map Controls */}
-            <div className="absolute top-4 right-4 flex flex-col gap-2 z-10">
-              <button className="bg-white shadow-md p-2 rounded hover:bg-slate-50 border border-outline-variant"><Plus size={16}/></button>
-              <button className="bg-white shadow-md p-2 rounded hover:bg-slate-50 border border-outline-variant"><Minus size={16}/></button>
-              <button className="bg-white shadow-md p-2 rounded hover:bg-slate-50 border border-outline-variant"><Layers size={16}/></button>
-            </div>
+            {/* Interactive Fleet Map */}
+            <FleetMapView vehicles={vehicles} />
           </div>
         </div>
 
@@ -169,13 +174,11 @@ export const DashboardView: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-outline-variant">
               <tr>
-                <th className="px-6 py-3 label-caps text-slate-500">Identificador</th>
-                <th className="px-6 py-3 label-caps text-slate-500">Veículo</th>
-                <th className="px-6 py-3 label-caps text-slate-500">Origem / Destino</th>
-                <th className="px-6 py-3 label-caps text-slate-500">Status</th>
-                <th className="px-6 py-3 label-caps text-slate-500">Progresso</th>
-                <th className="px-6 py-3 label-caps text-slate-500">Última Att.</th>
-                <th className="px-6 py-3"></th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">VEÍCULO / PLACA</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">ROTA / MOTORISTA</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px] text-center">STATUS</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">PROGRESSO</th>
+                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px] text-right">ÚLTIMA ATT.</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/30">
@@ -186,6 +189,7 @@ export const DashboardView: React.FC = () => {
                   vehicle={s.vehicle}
                   plate={s.plate}
                   route={s.route}
+                  driver={s.driver}
                   status={s.status}
                   progress={s.progress}
                   time={s.lastUpdate}
@@ -264,49 +268,65 @@ const ActivityRow: React.FC<{
   vehicle: string;
   plate: string;
   route: string;
+  driver?: string;
   status: string;
   progress: number;
   time: string;
   statusColor?: string;
   progressColor?: string;
-}> = ({ id, vehicle, plate, route, status, progress, time, statusColor, progressColor }) => (
-  <tr className="hover:bg-slate-50 transition-colors group">
+}> = ({ id, vehicle, plate, route, driver, status, progress, time, statusColor, progressColor }) => (
+  <tr className="hover:bg-slate-50/50 transition-colors group">
     <td className="px-6 py-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 bg-slate-100 flex items-center justify-center rounded border border-outline-variant/30">
-          <QrCode size={14} className="text-slate-400" />
+        <div className="w-10 h-10 bg-primary-container/10 rounded-xl flex items-center justify-center text-primary-container">
+          <Truck size={20} />
         </div>
-        <span className="data-mono font-bold text-primary-container">{id}</span>
-      </div>
-    </td>
-    <td className="px-6 py-4">
-      <p className="text-sm font-semibold text-slate-700">{vehicle}</p>
-      <p className="text-[10px] text-slate-400 font-mono uppercase tracking-tighter">{plate}</p>
-    </td>
-    <td className="px-6 py-4">
-      <div className="flex items-center text-sm text-slate-600 gap-2">
-        <span>{route.split(' → ')[0]}</span>
-        <ArrowRight size={12} className="text-slate-300" />
-        <span>{route.split(' → ')[1]}</span>
-      </div>
-    </td>
-    <td className="px-6 py-4">
-      <span className={cn(
-        "px-2 py-1 text-[10px] font-bold rounded",
-        statusColor || "bg-teal-100 text-teal-800"
-      )}>{status}</span>
-    </td>
-    <td className="px-6 py-4 w-48">
-      <div className="flex items-center gap-2">
-        <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-          <div className={cn("h-full", progressColor || "bg-primary-container")} style={{ width: `${progress}%` }}></div>
+        <div>
+          <p className="text-sm font-black text-primary-container uppercase leading-none mb-1">
+            {plate}
+          </p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+            {vehicle || 'ATEGO'}
+          </p>
         </div>
-        <span className="text-[10px] font-mono text-slate-500">{progress}%</span>
       </div>
     </td>
-    <td className="px-6 py-4 text-xs text-slate-500">{time}</td>
+    <td className="px-6 py-4">
+      <div>
+        <p className="text-sm font-black text-slate-700 uppercase leading-tight mb-1">
+          {route}
+        </p>
+        <div className="flex items-center gap-1.5">
+          <UserIcon size={12} className="text-slate-400" />
+          <p className="text-[11px] font-bold text-slate-500">
+            {driver || 'Motorista não informado'}
+          </p>
+        </div>
+      </div>
+    </td>
+    <td className="px-6 py-4">
+      <div className="flex justify-center">
+        <span className={cn(
+          "px-2 py-1 text-[10px] font-bold rounded uppercase tracking-wider",
+          statusColor || "bg-teal-100 text-teal-800"
+        )}>{status}</span>
+      </div>
+    </td>
+    <td className="px-6 py-4">
+      <div className="w-32">
+        <div className="flex justify-between items-center mb-1">
+          <span className="text-[10px] font-black text-slate-400">{progress}%</span>
+        </div>
+        <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+          <div 
+            className={cn("h-full transition-all duration-500", progressColor || "bg-primary-container")} 
+            style={{ width: `${progress}%` }} 
+          />
+        </div>
+      </div>
+    </td>
     <td className="px-6 py-4 text-right">
-      <button className="text-slate-400 hover:text-primary-container p-1 rounded-full"><MoreVertical size={16} /></button>
+      <span className="text-xs font-black text-slate-600">{time}</span>
     </td>
   </tr>
 );

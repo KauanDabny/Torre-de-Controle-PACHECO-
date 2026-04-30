@@ -17,7 +17,10 @@ import {
   Clock,
   ChevronRight,
   Eye,
-  Loader2
+  Loader2,
+  Users,
+  UserPlus,
+  User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'react-hot-toast';
@@ -34,8 +37,23 @@ const STATUS_COLUMNS: { status: ShipmentStatus; label: string; color: string }[]
 ];
 
 export const ShipmentsView: React.FC = () => {
-  const { shipments, addShipment, updateShipment, deleteShipment, syncSascar } = useShipments();
+  const { 
+    shipments, 
+    addShipment, 
+    updateShipment, 
+    deleteShipment, 
+    syncSascar, 
+    drivers, 
+    addDriver, 
+    addClient,
+    addRoute,
+    uniqueClients, 
+    uniqueRoutes 
+  } = useShipments();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDriversModalOpen, setIsDriversModalOpen] = useState(false);
+  const [isClientsModalOpen, setIsClientsModalOpen] = useState(false);
+  const [isRoutesModalOpen, setIsRoutesModalOpen] = useState(false);
   const [editingShipment, setEditingShipment] = useState<Shipment | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -107,6 +125,27 @@ export const ShipmentsView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
+          <button 
+            onClick={() => setIsDriversModalOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-outline-variant rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+          >
+            <Users size={16} />
+            Motoristas
+          </button>
+          <button 
+            onClick={() => setIsClientsModalOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-outline-variant rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+          >
+            <UserIcon size={16} />
+            Clientes
+          </button>
+          <button 
+            onClick={() => setIsRoutesModalOpen(true)}
+            className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-outline-variant rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2"
+          >
+            <MapPin size={16} />
+            Rotas
+          </button>
           <button className="flex-1 md:flex-none px-4 py-2.5 bg-white border border-outline-variant rounded-xl text-xs font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 transition-colors flex items-center justify-center gap-2">
             <Filter size={16} />
             Filtrar
@@ -425,6 +464,35 @@ export const ShipmentsView: React.FC = () => {
         />
       )}
 
+      {/* Drivers List Modal */}
+      {isDriversModalOpen && (
+        <DriversModal 
+          onClose={() => setIsDriversModalOpen(false)}
+        />
+      )}
+
+      {/* Clients List Modal */}
+      {isClientsModalOpen && (
+        <DataListModal 
+          title="Gestão de Clientes"
+          icon={<UserIcon />}
+          items={uniqueClients}
+          onClose={() => setIsClientsModalOpen(false)}
+          onAdd={addClient}
+        />
+      )}
+
+      {/* Routes List Modal */}
+      {isRoutesModalOpen && (
+        <DataListModal 
+          title="Gestão de Rotas"
+          icon={<MapPin />}
+          items={uniqueRoutes}
+          onClose={() => setIsRoutesModalOpen(false)}
+          onAdd={addRoute}
+        />
+      )}
+
       {/* Delete Confirmation Modal */}
       {deleteId && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
@@ -460,7 +528,7 @@ const ShipmentModal: React.FC<{
   onSubmit: (data: Partial<Shipment>) => void;
   initialData?: Shipment | null;
 }> = ({ onClose, onSubmit, initialData }) => {
-  const { vehicles } = useShipments();
+  const { vehicles, drivers, addDriver, uniqueClients, uniqueRoutes } = useShipments();
   const [formData, setFormData] = useState<Partial<Shipment>>(
     initialData 
       ? { ...initialData, id: initialData.id.substring(0, 3) } 
@@ -479,11 +547,30 @@ const ShipmentModal: React.FC<{
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [driverSearchTerm, setDriverSearchTerm] = useState('');
+  const [routeSearchTerm, setRouteSearchTerm] = useState('');
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  
   const [isPlateDropdownOpen, setIsPlateDropdownOpen] = useState(false);
+  const [isDriverDropdownOpen, setIsDriverDropdownOpen] = useState(false);
+  const [isRouteDropdownOpen, setIsRouteDropdownOpen] = useState(false);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
 
   const filteredVehicles = vehicles.filter(v => 
     v.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
     v.prefix?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredDrivers = drivers.filter(d => 
+    d.name.toLowerCase().includes(driverSearchTerm.toLowerCase())
+  );
+
+  const filteredRoutesSuggestions = uniqueRoutes.filter(r => 
+    r.toLowerCase().includes(routeSearchTerm.toLowerCase())
+  );
+
+  const filteredClientsSuggestions = uniqueClients.filter(c => 
+    c.toLowerCase().includes(clientSearchTerm.toLowerCase())
   );
 
   const handleSelectPlate = (vehicle: any) => {
@@ -590,14 +677,65 @@ const ShipmentModal: React.FC<{
             </div>
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 relative">
             <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Motorista</label>
-            <input 
-              placeholder="Nome do motorista"
-              value={formData.driver}
-              onChange={e => setFormData({ ...formData, driver: e.target.value })}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium"
-            />
+            <div className="relative">
+              <input 
+                placeholder="Nome do motorista"
+                value={isDriverDropdownOpen ? driverSearchTerm : formData.driver}
+                onChange={e => {
+                  if (!isDriverDropdownOpen) setIsDriverDropdownOpen(true);
+                  setDriverSearchTerm(e.target.value);
+                  setFormData({ ...formData, driver: e.target.value });
+                }}
+                onFocus={() => {
+                  setIsDriverDropdownOpen(true);
+                  setDriverSearchTerm(formData.driver || '');
+                }}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium text-sm"
+              />
+              <AnimatePresence>
+                {isDriverDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-50 left-0 right-0 mt-1 bg-white border border-outline-variant shadow-xl rounded-xl max-h-48 overflow-y-auto"
+                  >
+                    {filteredDrivers.length > 0 ? (
+                      filteredDrivers.map((d) => (
+                        <button
+                          key={d.id}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, driver: d.name });
+                            setIsDriverDropdownOpen(false);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center justify-between border-b border-outline-variant/30 last:border-0"
+                        >
+                          <span className="font-bold text-slate-700 text-sm">{d.name}</span>
+                          <span className="text-[9px] text-slate-400 uppercase font-black">Selecionar</span>
+                        </button>
+                      ))
+                    ) : driverSearchTerm.length > 2 ? (
+                      <div className="px-4 py-3 text-[10px] font-black text-teal-600 uppercase tracking-widest text-center italic">
+                        Novo motorista será cadastrado ao salvar
+                      </div>
+                    ) : (
+                      <div className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+                        Digite para pesquisar motoristas
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {isDriverDropdownOpen && (
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsDriverDropdownOpen(false)} 
+              />
+            )}
           </div>
 
           <div className="space-y-1">
@@ -611,25 +749,117 @@ const ShipmentModal: React.FC<{
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 relative">
             <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Rota (Origem → Destino)</label>
-            <input 
-              placeholder="Ex: São Paulo → Porto Alegre"
-              value={formData.route}
-              onChange={e => setFormData({ ...formData, route: e.target.value })}
-              required
-              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium"
-            />
+            <div className="relative">
+              <input 
+                placeholder="Ex: São Paulo → Porto Alegre"
+                value={isRouteDropdownOpen ? routeSearchTerm : formData.route}
+                onChange={e => {
+                  if (!isRouteDropdownOpen) setIsRouteDropdownOpen(true);
+                  setRouteSearchTerm(e.target.value);
+                  setFormData({ ...formData, route: e.target.value });
+                }}
+                onFocus={() => {
+                  setIsRouteDropdownOpen(true);
+                  setRouteSearchTerm(formData.route || '');
+                }}
+                required
+                className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium text-sm"
+              />
+              <AnimatePresence>
+                {isRouteDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-50 left-0 right-0 mt-1 bg-white border border-outline-variant shadow-xl rounded-xl max-h-48 overflow-y-auto"
+                  >
+                    {filteredRoutesSuggestions.length > 0 ? (
+                      filteredRoutesSuggestions.map((r, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, route: r });
+                            setIsRouteDropdownOpen(false);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center justify-between border-b border-outline-variant/30 last:border-0"
+                        >
+                          <span className="font-bold text-slate-700 text-sm">{r}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+                        Digite para cadastrar nova rota
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {isRouteDropdownOpen && (
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsRouteDropdownOpen(false)} 
+              />
+            )}
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1 relative">
             <label className="text-[11px] font-black uppercase text-slate-400 tracking-widest pl-1">Cliente</label>
-            <input 
-              placeholder="Nome da empresa ou cliente"
-              value={formData.client}
-              onChange={e => setFormData({ ...formData, client: e.target.value })}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium"
-            />
+            <div className="relative">
+              <input 
+                placeholder="Nome da empresa ou cliente"
+                value={isClientDropdownOpen ? clientSearchTerm : formData.client}
+                onChange={e => {
+                  if (!isClientDropdownOpen) setIsClientDropdownOpen(true);
+                  setClientSearchTerm(e.target.value);
+                  setFormData({ ...formData, client: e.target.value });
+                }}
+                onFocus={() => {
+                  setIsClientDropdownOpen(true);
+                  setClientSearchTerm(formData.client || '');
+                }}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-medium text-sm"
+              />
+              <AnimatePresence>
+                {isClientDropdownOpen && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="absolute z-50 left-0 right-0 mt-1 bg-white border border-outline-variant shadow-xl rounded-xl max-h-48 overflow-y-auto"
+                  >
+                    {filteredClientsSuggestions.length > 0 ? (
+                      filteredClientsSuggestions.map((c, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, client: c });
+                            setIsClientDropdownOpen(false);
+                          }}
+                          className="w-full px-4 py-2 text-left hover:bg-slate-50 flex items-center justify-between border-b border-outline-variant/30 last:border-0"
+                        >
+                          <span className="font-bold text-slate-700 text-sm">{c}</span>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+                        Digite para cadastrar novo cliente
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+            {isClientDropdownOpen && (
+              <div 
+                className="fixed inset-0 z-40" 
+                onClick={() => setIsClientDropdownOpen(false)} 
+              />
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -730,4 +960,173 @@ const getProgressColor = (status: ShipmentStatus) => {
     case 'ATRASADO': return 'bg-red-600';
     default: return 'bg-slate-400';
   }
+};
+
+const DriversModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { drivers, addDriver } = useShipments();
+  const [newDriver, setNewDriver] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDriver || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await addDriver(newDriver);
+      setNewDriver('');
+      toast.success('Motorista cadastrado!');
+    } catch (error) {
+      toast.error('Erro ao cadastrar motorista.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-[32px] border border-outline-variant shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+      >
+        <div className="px-8 py-6 border-b border-outline-variant flex items-center justify-between bg-slate-50">
+          <h3 className="text-xl font-bold text-primary-container flex items-center gap-2">
+            <Users className="text-primary-container" />
+            Gestão de Motoristas
+          </h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 overflow-hidden flex flex-col">
+          <form onSubmit={handleAdd} className="flex gap-2">
+            <input 
+              placeholder="Nome do novo motorista..."
+              value={newDriver}
+              onChange={e => setNewDriver(e.target.value)}
+              className="flex-1 px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-bold text-sm"
+            />
+            <button 
+              type="submit"
+              disabled={isSubmitting || !newDriver}
+              className="px-4 py-2.5 bg-primary-container text-white rounded-xl font-bold text-xs uppercase tracking-widest disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+            </button>
+          </form>
+
+          <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-2">Motoristas Cadastrados ({drivers.length})</p>
+            {drivers.map(d => (
+              <div key={d.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-outline-variant group hover:border-primary-container/30 transition-all">
+                <span className="font-bold text-slate-700">{d.name}</span>
+                <Users size={16} className="text-slate-300 group-hover:text-primary-container" />
+              </div>
+            ))}
+            {drivers.length === 0 && (
+              <div className="py-12 text-center text-slate-400">
+                <Users size={32} className="mx-auto mb-2 opacity-20" />
+                <p className="text-xs font-black uppercase tracking-widest">Nenhum motorista disponível</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const DataListModal: React.FC<{ 
+  onClose: () => void; 
+  title: string; 
+  icon: React.ReactNode; 
+  items: string[];
+  onAdd: (item: string) => Promise<void>;
+}> = ({ onClose, title, icon, items, onAdd }) => {
+  const [newValue, setNewValue] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newValue || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await onAdd(newValue);
+      setNewValue('');
+      toast.success(`${title.split(' ').pop()} cadastrado!`);
+    } catch (error) {
+      toast.error('Erro ao cadastrar.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[110] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white rounded-[32px] border border-outline-variant shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]"
+      >
+        <div className="px-8 py-6 border-b border-outline-variant flex items-center justify-between bg-slate-50">
+          <h3 className="text-xl font-bold text-primary-container flex items-center gap-2">
+            <span className="text-primary-container">
+              {icon}
+            </span>
+            {title}
+          </h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 transition-colors">
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 overflow-hidden flex flex-col">
+          <form onSubmit={handleAdd} className="flex gap-2">
+            <input 
+              placeholder={`Nome do novo ${title.split(' ').pop()?.toLowerCase()}...`}
+              value={newValue}
+              onChange={e => setNewValue(e.target.value)}
+              className="flex-1 px-4 py-2.5 bg-slate-50 border border-outline-variant rounded-xl focus:ring-2 focus:ring-primary-container outline-none font-bold text-sm"
+            />
+            <button 
+              type="submit"
+              disabled={isSubmitting || !newValue}
+              className="px-4 py-2.5 bg-primary-container text-white rounded-xl font-bold text-xs uppercase tracking-widest disabled:opacity-50"
+            >
+              {isSubmitting ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+            </button>
+          </form>
+
+          <div className="flex-1 overflow-y-auto pr-2 space-y-2">
+            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1 mb-2">Cadastrados ({items.length})</p>
+            {items.map((item, i) => (
+              <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-outline-variant group hover:border-primary-container/30 transition-all">
+                <span className="font-bold text-slate-700">{item}</span>
+                <div className="text-slate-300 group-hover:text-primary-container transition-colors">
+                  {icon}
+                </div>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div className="py-12 text-center text-slate-400">
+                <div className="mx-auto mb-2 opacity-20 flex justify-center scale-150">
+                  {icon}
+                </div>
+                <p className="text-xs font-black uppercase tracking-widest">Nenhum registro encontrado</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="pt-2">
+            <p className="text-[10px] italic text-slate-400 text-center">
+              Novos registros também são identificados automaticamente ao lançar uma viagem.
+            </p>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
 };

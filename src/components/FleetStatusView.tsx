@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Search,
   Filter,
@@ -15,12 +15,18 @@ import {
   Plus,
   X,
   Trash2,
-  Edit2
+  Edit2,
+  Map as MapIcon,
+  List,
+  Maximize2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useShipments } from '../contexts/ShipmentContext';
 import { Shipment, FleetVehicle } from '../types';
 import toast from 'react-hot-toast';
+import { FleetMapView } from './FleetMapView';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 export const FleetStatusView: React.FC = () => {
   const { vehicles, shipments, loading, addVehicle, updateVehicle, deleteVehicle } = useShipments();
@@ -28,6 +34,107 @@ export const FleetStatusView: React.FC = () => {
   const [filter, setFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<FleetVehicle | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isFs = !!(
+        document.fullscreenElement || 
+        (document as any).webkitFullscreenElement || 
+        (document as any).mozFullScreenElement || 
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isFs);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    let scrollInterval: NodeJS.Timeout;
+    if (isFullscreen && scrollRef.current) {
+      const container = scrollRef.current;
+      let isPaused = false;
+      
+      scrollInterval = setInterval(() => {
+        if (isPaused) return;
+        
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 2) {
+          isPaused = true;
+          // Pausa no fim para leitura e reseta para o topo instantaneamente
+          setTimeout(() => {
+            container.scrollTo({ top: 0, behavior: 'auto' });
+            // Pausa breve no topo antes de recomeçar a descida
+            setTimeout(() => {
+              isPaused = false;
+            }, 2000);
+          }, 4000);
+        } else {
+          container.scrollBy({ top: 1, behavior: 'auto' });
+        }
+      }, 50);
+    }
+    return () => clearInterval(scrollInterval);
+  }, [isFullscreen]);
+
+  const toggleFullScreen = () => {
+    const container = containerRef.current;
+    if (!container) {
+      setIsFullscreen(false);
+      return;
+    }
+
+    const isCurrentlyFs = !!(
+      document.fullscreenElement || 
+      (document as any).webkitFullscreenElement || 
+      (document as any).mozFullScreenElement || 
+      (document as any).msFullscreenElement
+    );
+
+    if (!isCurrentlyFs) {
+      const requestFs = container.requestFullscreen || 
+                        (container as any).webkitRequestFullscreen || 
+                        (container as any).mozRequestFullScreen || 
+                        (container as any).msRequestFullscreen;
+      if (requestFs) {
+        requestFs.call(container).catch(err => {
+          toast.error(`Erro ao ativar tela cheia: ${err.message}`);
+        });
+      }
+    } else {
+      const exitFs = document.exitFullscreen || 
+                    (document as any).webkitExitFullscreen || 
+                    (document as any).mozCancelFullScreen || 
+                    (document as any).msExitFullscreen;
+      if (exitFs) {
+        // Execute exit call and force state update on any outcome
+        try {
+          const promise = exitFs.call(document);
+          if (promise && promise.then) {
+            promise.catch(() => setIsFullscreen(false)).finally(() => setIsFullscreen(false));
+          } else {
+            setIsFullscreen(false);
+          }
+        } catch (e) {
+          setIsFullscreen(false);
+        }
+      } else {
+        setIsFullscreen(false);
+      }
+    }
+  };
 
   // Pair vehicles with their latest shipment
   const fleetData = useMemo(() => {
@@ -55,7 +162,14 @@ export const FleetStatusView: React.FC = () => {
   }, [vehicles, shipments]);
 
   const filteredFleet = useMemo(() => {
+    // In Fullscreen mode, show all vehicles unless the user explicitly wants to filter
+    // Actually, usually in a monitor dashboard, you want to see everything
+    const dataToFilter = isFullscreen ? fleetData : fleetData; // Could bypass filter here if needed
+    
     return fleetData.filter(item => {
+      // If we are in fullscreen, we skip search/filter to show the whole fleet
+      if (isFullscreen) return true;
+
       const matchesSearch = item.vehicle.plate.toLowerCase().includes(searchTerm.toLowerCase()) || 
                            item.vehicle.prefix?.toLowerCase().includes(searchTerm.toLowerCase());
       
@@ -71,7 +185,7 @@ export const FleetStatusView: React.FC = () => {
       
       return true;
     });
-  }, [fleetData, searchTerm, filter]);
+  }, [fleetData, searchTerm, filter, isFullscreen]);
 
   const stats = useMemo(() => {
     const total = vehicles.length;
@@ -112,6 +226,114 @@ export const FleetStatusView: React.FC = () => {
     }
   };
 
+  const handleExportExcel = async () => {
+    if (filteredFleet.length === 0) {
+      toast.error('Nenhum dado para exportar');
+      return;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Frota');
+
+    // Add main top header
+    worksheet.mergeCells('A1:G1');
+    const mainTitleRow = worksheet.getRow(1);
+    mainTitleRow.getCell(1).value = 'TOCOS - TRUCKS';
+    mainTitleRow.getCell(1).font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+    mainTitleRow.getCell(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF0D3D3D' }
+    };
+    mainTitleRow.getCell(1).alignment = { vertical: 'middle', horizontal: 'center' };
+    mainTitleRow.height = 30;
+
+    // Define columns based on screenshot
+    worksheet.getRow(2).values = ['PLACA', 'MOTORISTA', 'CLIENTE', 'ORIGEM', 'DESTINO', 'CARREGAMENTO (ETA)', 'DESCARGA (ETD)'];
+    
+    // Set column widths
+    worksheet.columns = [
+      { key: 'plate', width: 15 },
+      { key: 'driver', width: 30 },
+      { key: 'client', width: 20 },
+      { key: 'origin', width: 30 },
+      { key: 'destination', width: 30 },
+      { key: 'eta', width: 20 },
+      { key: 'etd', width: 20 }
+    ];
+
+    // Style the column headers (Row 2)
+    const headerRow = worksheet.getRow(2);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0D3D3D' }
+      };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+    headerRow.height = 25;
+
+    // Add data
+    filteredFleet.forEach(({ vehicle, latestShipment }) => {
+      const [origin, destination] = (latestShipment?.route || '').includes(' X ') 
+        ? (latestShipment?.route || '').split(' X ').map(s => s.trim())
+        : [latestShipment?.route || vehicle.address || '---', '---'];
+
+      const rowData = {
+        plate: vehicle.plate,
+        driver: latestShipment?.driver || '---',
+        client: latestShipment?.client || '---',
+        origin: origin || '---',
+        destination: destination || '---',
+        eta: latestShipment?.collectionTime ? new Date(latestShipment.collectionTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '---',
+        etd: latestShipment?.unloadingTime ? new Date(latestShipment.unloadingTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : '---'
+      };
+
+      const row = worksheet.addRow(rowData);
+
+      // Determine background color based on status to match screenshot visual logic
+      const status = latestShipment?.status || 'VAZIO';
+      let bgColor = 'FFFFFFFF'; // Default white
+      
+      if (['EM TRÂNSITO', 'CARREGANDO'].includes(status)) {
+        bgColor = 'FFF4CCCC'; // Soft Red/Pink from screenshot
+      } else if (status === 'AGUARDANDO') {
+        bgColor = 'FFFFE599'; // Soft Yellow from screenshot
+      } else if (['VAZIO', 'DISPONÍVEL'].includes(status)) {
+        bgColor = 'FFD9EAD3'; // Soft Green
+      } else if (status === 'EM MANUTENÇÃO') {
+        bgColor = 'FFD9D2E9'; // Soft Purple
+      } else if (status === 'PARADO (PONTO DE APOIO)') {
+        bgColor = 'FFC9DAF8'; // Soft Blue
+      }
+
+      // Apply row styling
+      row.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: bgColor }
+        };
+        cell.font = { bold: true, color: { argb: 'FF000000' }, size: 10 };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FF000000' } },
+          left: { style: 'thin', color: { argb: 'FF000000' } },
+          bottom: { style: 'thin', color: { argb: 'FF000000' } },
+          right: { style: 'thin', color: { argb: 'FF000000' } }
+        };
+      });
+    });
+
+    // Generate and download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, `monitoramento_frota_${new Date().toISOString().split('T')[0]}.xlsx`);
+    toast.success('Excel exportado com sucesso!');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -121,7 +343,7 @@ export const FleetStatusView: React.FC = () => {
   }
 
   return (
-    <div className="p-8 flex flex-col gap-8 max-w-[1600px] mx-auto">
+    <div className="p-8 flex flex-col gap-8 max-w-[1600px] mx-auto bg-slate-50 overflow-y-auto h-full">
       {/* Page Header & Stats */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
         <div>
@@ -142,6 +364,13 @@ export const FleetStatusView: React.FC = () => {
             bgColor="bg-tertiary-fixed"
           />
           <button 
+            onClick={toggleFullScreen}
+            className="bg-white text-slate-600 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-outline-variant hover:bg-slate-50 transition-all shadow-sm group"
+            title="Modo Telão"
+          >
+            <Maximize2 size={18} className="text-slate-400 group-hover:text-primary-container" /> Modo Telão
+          </button>
+          <button 
             onClick={() => handleOpenModal()}
             className="bg-primary-container text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary-container/20"
           >
@@ -152,16 +381,26 @@ export const FleetStatusView: React.FC = () => {
 
       {/* Search and Filters */}
       <div className="flex flex-col md:flex-row items-center gap-4">
-        <div className="bg-white px-4 py-2 rounded-xl border border-outline-variant shadow-sm flex items-center gap-3 flex-1 w-full">
-          <Search size={18} className="text-slate-400" />
-          <input 
-            placeholder="Pesquisar por placa ou prefixo..." 
-            className="bg-transparent border-none outline-none text-sm w-full font-medium"
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-          />
+        <div className="flex items-center gap-2 w-full md:w-auto flex-1">
+          <div className="bg-white px-4 py-2 rounded-xl border border-outline-variant shadow-sm flex items-center gap-3 flex-1">
+            <Search size={18} className="text-slate-400" />
+            <input 
+              placeholder="Pesquisar por placa ou prefixo..." 
+              className="bg-transparent border-none outline-none text-sm w-full font-medium"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={handleExportExcel}
+            className="p-2.5 bg-white border border-outline-variant rounded-xl text-slate-500 hover:text-primary-container hover:bg-slate-50 transition-all shadow-sm"
+            title="Exportar Excel Estilizado"
+          >
+            <Download size={20} />
+          </button>
         </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar">
+        
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 custom-scrollbar no-scrollbar whitespace-nowrap">
           {['Todos', 'Carregados', 'Aguardando', 'Vazios', 'Em Manutenção'].map(label => (
             <FilterChip 
               key={label} 
@@ -173,9 +412,23 @@ export const FleetStatusView: React.FC = () => {
         </div>
       </div>
 
-      {/* Fleet List Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden">
-        <div className="overflow-x-auto">
+      {/* Fleet List View */}
+      <div ref={containerRef} className="bg-white rounded-xl shadow-sm border border-outline-variant overflow-hidden flex flex-col relative">
+        {isFullscreen && (
+          <button 
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              toggleFullScreen();
+            }}
+            className="fixed md:absolute top-4 right-4 z-[9999] bg-red-600 hover:bg-red-700 text-white p-2.5 rounded-full shadow-2xl transition-all flex items-center justify-center cursor-pointer pointer-events-auto border-2 border-white/50"
+            title="Sair do Telão"
+          >
+            <X size={24} strokeWidth={3} />
+          </button>
+        )}
+        <div ref={scrollRef} className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-100px)] lg:max-h-none">
           <table className="w-full text-left">
             <thead className="bg-surface-container border-b border-outline-variant">
               <tr>
@@ -454,52 +707,54 @@ const FleetRow: React.FC<{
             <Truck size={24} />
           </div>
           <div>
-            <p className={cn("text-base tracking-tighter", getMainTextStyles(status))}>{plate}</p>
-            <p className={cn("text-[10px] uppercase tracking-widest", getSubtextStyles(status))}>{model}</p>
+            <p className={cn("text-xl tracking-tighter font-black", getMainTextStyles(status))}>{plate}</p>
+            <p className={cn("text-[10px] uppercase tracking-widest font-black leading-none", getSubtextStyles(status))}>{model}</p>
           </div>
         </div>
       </td>
       <td className="px-6 py-6 font-black">
         <span className={cn(
-          "px-4 py-1.5 rounded-lg font-black text-[10px] tracking-widest border border-white/30 uppercase shadow-sm inline-block bg-white/10",
+          "px-4 py-2 rounded-xl font-black text-[11px] tracking-widest border border-white/30 uppercase shadow-lg inline-block bg-white/20",
         )}>
           {status}
         </span>
       </td>
-      <td className="px-6 py-6">
-        <div className="flex flex-col gap-1.5">
+      <td className="px-6 py-6 border-l border-white/10">
+        <div className="flex flex-col gap-2">
           {client ? (
             <div className="space-y-1">
-              <p className={cn("text-[11px] flex items-center gap-2 uppercase tracking-tight", getMainTextStyles(status))}>
-                <Building2 size={12} className={cn(getSubtextStyles(status))} /> {client}
+              <p className={cn("text-xs flex items-center gap-2 uppercase tracking-tight font-black", getMainTextStyles(status))}>
+                <Building2 size={14} className={cn(getSubtextStyles(status))} /> {client}
               </p>
               {driver && (
-                <p className={cn("text-[10px] font-bold flex items-center gap-2", getSubtextStyles(status))}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-white/40" />
-                  Motorista: {driver}
+                <p className={cn("text-xs font-black flex items-center gap-2", getMainTextStyles(status))}>
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  Motorista: <span className="uppercase">{driver}</span>
                 </p>
               )}
             </div>
           ) : (
-             <p className={cn("text-[9px] font-black uppercase tracking-widest", getSubtextStyles(status))}>VEÍCULO DISPONÍVEL</p>
+             <p className={cn("text-[10px] font-black uppercase tracking-widest", getSubtextStyles(status))}>VEÍCULO DISPONÍVEL</p>
           )}
-          <p className={cn("text-[11px] flex items-center gap-2 font-bold", getSubtextStyles(status))}>
-            <MapPin size={12} className={cn(getSubtextStyles(status))} /> {route || location || 'Localização não informada'}
-          </p>
+          <div className="pt-1 border-t border-white/10 mt-1">
+            <p className={cn("text-xs flex items-center gap-2 font-black uppercase", getMainTextStyles(status))}>
+              <MapPin size={14} className={cn(getSubtextStyles(status))} /> {route || location || 'Localização não informada'}
+            </p>
+          </div>
         </div>
       </td>
-      <td className="px-6 py-6">
-        <div className="space-y-1.5 flex flex-col font-black">
-          <div className="flex items-center gap-2">
-            <span className={cn("text-[9px] uppercase tracking-widest min-w-[50px]", getSubtextStyles(status))}>Coleta:</span>
-            <span className={cn("text-[11px]", getMainTextStyles(status))}>
-              {collectionTime ? new Date(collectionTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---'}
+      <td className="px-6 py-6 border-l border-white/10">
+        <div className="space-y-2 flex flex-col font-black">
+          <div className="flex flex-col">
+            <span className={cn("text-[10px] uppercase tracking-widest mb-1", getSubtextStyles(status))}>Coleta:</span>
+            <span className={cn("text-sm", getMainTextStyles(status))}>
+              {collectionTime ? new Date(collectionTime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={cn("text-[9px] uppercase tracking-widest min-w-[50px]", getSubtextStyles(status))}>Descarga:</span>
-            <span className={cn("text-[11px]", getMainTextStyles(status))}>
-              {unloadingTime ? new Date(unloadingTime).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '---'}
+          <div className="flex flex-col">
+            <span className={cn("text-[10px] uppercase tracking-widest mb-1", getSubtextStyles(status))}>Descarga:</span>
+            <span className={cn("text-sm", getMainTextStyles(status))}>
+              {unloadingTime ? new Date(unloadingTime).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '---'}
             </span>
           </div>
         </div>

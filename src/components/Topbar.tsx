@@ -1,13 +1,14 @@
 import React from 'react';
-import { Search, Bell, Grid, HelpCircle, Menu, LogOut } from 'lucide-react';
+import { Search, Bell, Grid, HelpCircle, Menu, LogOut, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface TopbarProps {
   viewTitle: string;
   onMenuToggle?: () => void;
+  onViewChange?: (view: string) => void;
 }
 
-export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle }) => {
+export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle, onViewChange }) => {
   const { user, logout } = useAuth();
 
   return (
@@ -63,6 +64,13 @@ export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle }) => {
               <p className="text-xs font-bold text-primary-container truncate">{user?.name}</p>
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{user?.role}</p>
             </div>
+            <button 
+              onClick={() => onViewChange?.('profile')}
+              className="w-full text-left px-4 py-3 text-sm text-slate-600 hover:bg-slate-50 flex items-center gap-3 transition-all"
+            >
+              <User size={16} />
+              <span className="font-medium">Meu Perfil</span>
+            </button>
             <button 
               onClick={logout}
               className="w-full text-left px-4 py-3 text-sm text-slate-600 hover:bg-red-50 flex items-center gap-3 hover:text-error transition-all"
