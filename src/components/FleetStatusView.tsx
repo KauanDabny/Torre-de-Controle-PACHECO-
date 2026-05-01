@@ -18,7 +18,8 @@ import {
   Edit2,
   Map as MapIcon,
   List,
-  Maximize2
+  Maximize2,
+  Activity
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useShipments } from '../contexts/ShipmentContext';
@@ -29,7 +30,7 @@ import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
 export const FleetStatusView: React.FC = () => {
-  const { vehicles, shipments, loading, addVehicle, updateVehicle, deleteVehicle } = useShipments();
+  const { vehicles, shipments, loading, addVehicle, updateVehicle, deleteVehicle, syncSascar } = useShipments();
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('Todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -371,6 +372,15 @@ export const FleetStatusView: React.FC = () => {
             <Maximize2 size={18} className="text-slate-400 group-hover:text-primary-container" /> Modo Telão
           </button>
           <button 
+            onClick={syncSascar}
+            disabled={loading}
+            className="bg-white text-slate-600 px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 border border-outline-variant hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+            title="Sincronizar Rastreamento"
+          >
+            <Activity size={18} className={cn("text-primary-container", loading && "animate-spin")} /> 
+            {loading ? 'Sincronizando...' : 'Sincronizar Sascar'}
+          </button>
+          <button 
             onClick={() => handleOpenModal()}
             className="bg-primary-container text-white px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 hover:opacity-90 transition-all shadow-lg shadow-primary-container/20"
           >
@@ -468,9 +478,17 @@ export const FleetStatusView: React.FC = () => {
           </table>
         </div>
         
-        {/* Pagination Info */}
-        <div className="px-6 py-4 bg-white border-t border-outline-variant flex justify-between items-center">
-          <p className="text-xs text-slate-500 font-bold">Mostrando {filteredFleet.length} de {stats.total} veículos</p>
+        {/* Pagination Info & Sascar Status */}
+        <div className="px-6 py-4 bg-slate-50 border-t border-outline-variant flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Conectado via Sascar API (SOAP)</span>
+            </div>
+            <div className="w-px h-4 bg-slate-200 mx-1" />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Mostrando {filteredFleet.length} de {stats.total} veículos</p>
+          </div>
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Gateway: HTTPS://SASINTEGRA.SASCAR.COM.BR</span>
         </div>
       </div>
 

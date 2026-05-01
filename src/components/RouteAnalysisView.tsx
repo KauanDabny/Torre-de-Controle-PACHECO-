@@ -20,152 +20,243 @@ import {
   AlertCircle,
   MoreVertical,
   TrendingDown,
-  Minus
+  Minus,
+  MapPin,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '../lib/utils';
-
-const rankingData = [
-  { name: 'BR-116 (Dutra)', value: 450, color: '#002626' },
-  { name: 'BR-381 (Fernão Dias)', value: 320, color: '#4d6262' },
-  { name: 'BR-262', value: 180, color: '#3a6565' },
-  { name: 'SP-070 (Airton Senna)', value: 120, color: '#a2cfce' },
-];
-
-const historyData = [
-  { time: '00:00', dutra: 40, fernão: 30 },
-  { time: '04:00', dutra: 20, fernão: 45 },
-  { time: '08:00', dutra: 85, fernão: 60 },
-  { time: '12:00', dutra: 55, fernão: 35 },
-  { time: '16:00', dutra: 95, fernão: 70 },
-  { time: '20:00', dutra: 45, fernão: 90 },
-  { time: 'Agora', dutra: 65, fernão: 40 },
-];
+import { useShipments } from '../contexts/ShipmentContext';
 
 export const RouteAnalysisView: React.FC = () => {
+  const { vehicles, loading } = useShipments();
+  const [history, setHistory] = React.useState<{ topCongestedRoutes: any[], totalEvents: number }>({ topCongestedRoutes: [], totalEvents: 0 });
+
+  React.useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch('/api/sascar/history');
+        const data = await res.json();
+        setHistory(data);
+      } catch (e) {
+        console.error("Error fetching history:", e);
+      }
+    };
+    fetchHistory();
+  }, [vehicles]); // Refetch when vehicles update (likely after a sync)
+
+  // Process vehicle data for route analysis (Current State)
+  const routeData = React.useMemo(() => {
+    const routes: Record<string, {
+      name: string;
+      vehicles: any[];
+      movingCount: number;
+      stoppedInTransitCount: number;
+      avgSpeed: number;
+      totalDelayScore: number;
+    }> = {};
+
+    vehicles.forEach(v => {
+      const routeName = v.macro && v.macro !== 'Sem Macro' ? v.macro : 'NÃO IDENTIFICADO';
+      if (!routes[routeName]) {
+        routes[routeName] = {
+          name: routeName,
+          vehicles: [],
+          movingCount: 0,
+          stoppedInTransitCount: 0,
+          avgSpeed: 0,
+          totalDelayScore: 0
+        };
+      }
+
+      routes[routeName].vehicles.push(v);
+      if (v.speed > 5) {
+        routes[routeName].movingCount++;
+      }
+      
+      // Stopped in transit logic: ignition ON but speed 0
+      if (v.ignition && v.speed === 0) {
+        routes[routeName].stoppedInTransitCount++;
+        routes[routeName].totalDelayScore += 1; // Basic scoring
+      }
+    });
+
+    // Finalize averages and convert to array
+    return Object.values(routes).map(r => {
+      const movingVehicles = r.vehicles.filter(v => v.speed > 0);
+      r.avgSpeed = movingVehicles.length > 0 
+        ? movingVehicles.reduce((acc, v) => acc + v.speed, 0) / movingVehicles.length 
+        : 0;
+      return r;
+    }).sort((a, b) => b.totalDelayScore - a.totalDelayScore || b.vehicles.length - a.vehicles.length);
+  }, [vehicles]);
+
+  // KPIs
+  const criticalRoute = routeData.find(r => r.name !== 'NÃO IDENTIFICADO')?.name || "Nenhuma";
+  const totalImpactedTrips = vehicles.filter(v => v.ignition && v.speed === 0).length;
+  const activeRoutesCount = routeData.filter(r => r.name !== 'NÃO IDENTIFICADO').length;
+  
+  // Ranking Data for chart - Prioritize Historical Data if available
+  const rankingData = React.useMemo(() => {
+    if (history.topCongestedRoutes && history.topCongestedRoutes.length > 0) {
+      return history.topCongestedRoutes.map((r, idx) => ({
+         name: r.route.length > 20 ? r.route.substring(0, 20) + '...' : r.route,
+         fullName: r.route,
+         value: r.eventCount,
+         critical: 0, // In history we don't have current critical status
+         color: idx === 0 ? '#b91c1c' : idx < 3 ? '#e65100' : '#475569'
+      }));
+    }
+
+    return routeData
+      .filter(r => r.name !== 'NÃO IDENTIFICADO')
+      .slice(0, 5)
+      .map((r, idx) => ({
+        name: r.name.length > 20 ? r.name.substring(0, 20) + '...' : r.name,
+        fullName: r.name,
+        value: r.vehicles.length,
+        critical: r.stoppedInTransitCount,
+        color: r.stoppedInTransitCount > 0 ? '#b91c1c' : idx === 0 ? '#0f172a' : '#475569'
+      }));
+  }, [history, routeData]);
+
+  // Historical Mock - (Keeping some visual fidelity but using scale from real data)
+  const historyData = [
+    { time: '08:00', valor: Math.max(10, activeRoutesCount * 0.5) },
+    { time: '10:00', valor: Math.max(15, activeRoutesCount * 0.8) },
+    { time: '12:00', valor: Math.max(12, activeRoutesCount * 0.6) },
+    { time: '14:00', valor: Math.max(20, activeRoutesCount * 1.1) },
+    { time: '16:00', valor: activeRoutesCount },
+  ];
+
+  if (loading && vehicles.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-pulse flex flex-col items-center">
+          <Truck className="w-12 h-12 text-slate-300 mb-4" />
+          <p className="text-slate-500 font-bold">Analisando rotas...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       {/* Page Header */}
       <div className="flex flex-col gap-1">
-        <h2 className="display-lg text-primary-container">Análise de Rodovias e Vias</h2>
-        <p className="text-slate-500 text-sm font-medium">Relatório consolidado de fluxos e gargalos logísticos em tempo real.</p>
+        <h2 className="text-2xl font-black tracking-tight text-slate-800 uppercase">Análise de Fluxo por Rota</h2>
+        <p className="text-slate-500 text-sm font-medium">Relatório dinâmico baseado no macrocomando ativo dos veículos em campo.</p>
       </div>
 
-      {/* KPIs Bento Grid */}
+      {/* KPIs Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <AnalysisKPI 
-          label="RODOVIA MAIS CRÍTICA"
-          value="BR-116 Dutra"
-          trend="+12% vs ontem"
+          label="ROTA MAIS CRÍTICA"
+          value={criticalRoute.length > 15 ? criticalRoute.substring(0, 15) + '...' : criticalRoute}
+          trend={routeData[0]?.stoppedInTransitCount > 0 ? "Foco prioritário" : "Estável"}
+          trendIcon={<AlertCircle size={14} />}
+          icon={<AlertTriangle size={18} className="text-red-600" />}
+          bgColor="bg-red-50"
+          trendColor="text-red-600"
+        />
+        <AnalysisKPI 
+          label="VEÍCULOS PARADOS"
+          value={totalImpactedTrips.toString().padStart(2, '0')}
+          subLabel="Em rota, com ignição ligada"
+          icon={<Clock size={18} className="text-slate-600" />}
+          bgColor="bg-slate-100"
+        />
+        <AnalysisKPI 
+          label="ROTAS ATIVAS"
+          value={activeRoutesCount.toString().padStart(2, '0')}
+          trend="Monitoramento em 100%"
           trendIcon={<TrendingUp size={14} />}
-          icon={<AlertTriangle size={18} className="text-error" />}
-          bgColor="bg-error-container"
-          trendColor="text-error"
+          icon={<Truck size={18} className="text-blue-600" />}
+          bgColor="bg-blue-50"
+          trendColor="text-blue-600"
         />
         <AnalysisKPI 
-          label="ATRASO ACUMULADO"
-          value="1.240h"
-          subLabel="Total frota ativa"
-          icon={<Clock size={18} className="text-secondary" />}
-          bgColor="bg-secondary-container"
-        />
-        <AnalysisKPI 
-          label="VIAGENS IMPACTADAS"
-          value="842"
-          trend="85% monitoradas"
-          trendIcon={<TrendingUp size={14} />}
-          icon={<Truck size={18} className="text-primary-container" />}
-          bgColor="bg-primary-fixed"
-          trendColor="text-teal-600"
-        />
-        <AnalysisKPI 
-          label="TEMPO MÉDIO LENTIDÃO"
-          value="52min"
-          subLabel="Por trecho congestionado"
-          icon={<Timer size={18} className="text-tertiary" />}
-          bgColor="bg-tertiary-fixed"
+          label="VELOCIDADE MÉDIA"
+          value={`${(vehicles.reduce((acc, v) => acc + (v.speed || 0), 0) / (vehicles.length || 1)).toFixed(0)} km/h`}
+          subLabel="Geral de toda a frota"
+          icon={<Timer size={18} className="text-emerald-600" />}
+          bgColor="bg-emerald-50"
         />
       </div>
 
-      {/* Ranking & Alerts */}
+      {/* Ranking & Critical Areas */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-outline-variant flex items-center justify-between">
-            <h3 className="title-sm text-primary-container font-bold">Ranking de Atrasos por Rodovia</h3>
-            <button className="text-primary-container text-xs font-bold flex items-center gap-1 hover:underline">
-              VER TUDO <ArrowIcon />
-            </button>
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+              {history.topCongestedRoutes.length > 0 ? "Trechos com Mais Lentidões (Histórico)" : "Volume por Rota (Atual)"}
+            </h3>
           </div>
-          <div className="p-8 flex-1">
+          <div className="p-8 flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart layout="vertical" data={rankingData} margin={{ left: 20, right: 40 }}>
-                <YAxis dataKey="name" type="category" hide />
+                <YAxis dataKey="name" type="category" width={100} axisLine={false} tickLine={false} tick={{ fontSize: 10, fontWeight: 800, fill: '#64748b' }} />
                 <XAxis type="number" hide />
                 <Tooltip 
-                  cursor={{ fill: 'transparent' }} 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  cursor={{ fill: '#f8fafc' }} 
+                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
                 />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={24}>
                   {rankingData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            {/* Legend Mock */}
-            <div className="space-y-4 mt-[-40px]">
+            <div className="grid grid-cols-2 gap-4 mt-4 px-2">
               {rankingData.map((item) => (
-                <div key={item.name} className="flex justify-between items-center text-sm">
-                  <span className="font-bold text-primary-container">{item.name}</span>
-                  <span className="font-bold text-slate-500 font-mono">{item.value}h</span>
+                <div key={item.fullName} className="flex flex-col p-3 rounded-xl bg-slate-50 border border-slate-100">
+                  <span className="text-[10px] font-black text-slate-400 uppercase truncate">{item.fullName}</span>
+                  <div className="flex justify-between items-end mt-1">
+                    <span className="text-xl font-black text-slate-700">{item.value} {history.topCongestedRoutes.length > 0 ? 'lentidões' : 'veíc.'}</span>
+                    {item.critical > 0 && <span className="text-[9px] font-bold text-red-600 uppercase flex items-center gap-1"><AlertCircle size={10} /> {item.critical} parados</span>}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-outline-variant shadow-sm flex flex-col overflow-hidden">
-          <div className="p-6 border-b border-outline-variant">
-            <h3 className="title-sm text-primary-container font-bold">Alertas de Trechos Críticos</h3>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden h-full">
+          <div className="p-6 border-b border-slate-100">
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Veículos Críticos em Rota</h3>
           </div>
-          <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-surface-container-lowest">
-            <RoadAlert 
-              road="BR-116 KM 210"
-              desc="Lentidão extrema: 45min de atraso."
-              status="CRÍTICO"
-              severity="error"
-              icon="report"
-            />
-            <RoadAlert 
-              road="BR-381 Trevo de Sabará"
-              desc="Acidente envolvendo bitrem. Pista parcial."
-              status="ATENÇÃO"
-              severity="warning"
-              icon="car_crash"
-            />
-            <RoadAlert 
-              road="BR-101 Angra dos Reis"
-              desc="Neblina densa. Velocidade reduzida."
-              status="MONITORAMENTO"
-              severity="info"
-              icon="cloud"
-            />
+          <div className="p-4 flex-1 overflow-y-auto space-y-3 bg-slate-50/30">
+            {vehicles.filter(v => v.ignition && v.speed === 0).length > 0 ? (
+              vehicles.filter(v => v.ignition && v.speed === 0).slice(0, 6).map(v => (
+                <RoadAlert 
+                  key={v.id}
+                  road={v.plate}
+                  desc={v.macro || "Rota não identificada"}
+                  status=" PARADO EM OPERAÇÃO"
+                  severity="error"
+                  address={v.address}
+                />
+              ))
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-50">
+                <ShieldCheck size={48} className="text-emerald-500 mb-2" />
+                <p className="text-xs font-bold text-slate-600 uppercase">Tudo normal</p>
+                <p className="text-[10px] text-slate-400 mt-1">Nenhum veículo parado com ignição ligada.</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Historical Trend */}
-      <div className="bg-white rounded-xl border border-outline-variant shadow-sm p-8 overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 overflow-hidden">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h3 className="title-sm text-primary-container font-bold">Histórico de Lentidão por Rodovia</h3>
-            <p className="text-xs text-slate-400 mt-1">Comparativo de picos de atraso nas últimas 24 horas</p>
-          </div>
-          <div className="flex gap-4">
-            <LegendItem color="bg-primary-container" label="Dutra" />
-            <LegendItem color="bg-primary-fixed-dim" label="Fernão Dias" />
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Intensidade de Operação</h3>
+            <p className="text-xs text-slate-400 mt-1">Estimativa de rotas ativas simuladas no tempo</p>
           </div>
         </div>
-        <div className="h-64 w-full">
+        <div className="h-48 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ReLineChart data={historyData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -177,65 +268,49 @@ export const RouteAnalysisView: React.FC = () => {
               />
               <YAxis hide />
               <Tooltip 
-                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }}
               />
-              <Line type="monotone" dataKey="dutra" stroke="#002626" strokeWidth={3} dot={false} activeDot={{ r: 6 }} />
-              <Line type="monotone" dataKey="fernão" stroke="#a2cfce" strokeWidth={3} strokeDasharray="5 5" dot={false} />
+              <Line type="monotone" dataKey="valor" stroke="#0f172a" strokeWidth={4} dot={{ r: 4, fill: '#0f172a' }} activeDot={{ r: 6 }} />
             </ReLineChart>
           </ResponsiveContainer>
         </div>
       </div>
 
       {/* Detailed Impact Table */}
-      <div className="bg-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-outline-variant bg-slate-50/50">
-          <h3 className="title-sm text-primary-container font-bold">Impacto Detalhado por Rodovia</h3>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Painel Geral de Rotas</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-outline-variant">
-                <th className="px-6 py-4 label-caps text-slate-500">RODOVIA</th>
-                <th className="px-6 py-4 label-caps text-slate-500">VIAGENS AFETADAS</th>
-                <th className="px-6 py-4 label-caps text-slate-500">ATRASO MÉDIO</th>
-                <th className="px-6 py-4 label-caps text-slate-500">TENDÊNCIA</th>
-                <th className="px-6 py-4 label-caps text-slate-500">STATUS ATUAL</th>
-                <th className="px-6 py-4 text-right"></th>
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Rota (Macrocomando)</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Frequência</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Velocidade Média</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Eventos (Hist.)</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Críticos</th>
+                <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Status da Via</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-outline-variant/30">
-              <ImpactRow 
-                code="116"
-                name="BR-116 (Dutra)"
-                trips="142 viagens"
-                delay="65 min"
-                trend="Alta"
-                trendIcon={<TrendingUp size={14}/>}
-                status="CONGESTIONADO"
-                statusColor="bg-error-container text-error"
-              />
-               <ImpactRow 
-                code="381"
-                name="BR-381 (Fernão Dias)"
-                trips="98 viagens"
-                delay="38 min"
-                trend="Estável"
-                trendIcon={<Minus size={14}/>}
-                status="LENTO"
-                statusColor="bg-tertiary-fixed text-tertiary"
-                trendColor="text-slate-500"
-              />
-               <ImpactRow 
-                code="262"
-                name="BR-262"
-                trips="45 viagens"
-                delay="12 min"
-                trend="Baixa"
-                trendIcon={<TrendingDown size={14}/>}
-                status="NORMAL"
-                statusColor="bg-primary-fixed text-primary-container"
-                trendColor="text-teal-600"
-              />
+            <tbody className="divide-y divide-slate-100">
+              {routeData.filter(r => r.name !== 'NÃO IDENTIFICADO').map((r) => {
+                const histEvent = history.topCongestedRoutes.find(h => h.route === r.name);
+                return (
+                  <ImpactRow 
+                    key={r.name}
+                    name={r.name}
+                    trips={`${r.vehicles.length} Veículos`}
+                    delay={`${r.avgSpeed.toFixed(0)} km/h`}
+                    trend={r.stoppedInTransitCount > 0 ? "Alerta" : "Normal"}
+                    trendIcon={r.stoppedInTransitCount > 0 ? <AlertTriangle size={14}/> : <ShieldCheck size={14}/>}
+                    status={r.stoppedInTransitCount > 2 ? "CONGESTIONADA" : r.stoppedInTransitCount > 0 ? "LENTA" : "FLUXO LIVRE"}
+                    statusColor={r.stoppedInTransitCount > 2 ? "bg-red-50 text-red-600 border-red-200" : r.stoppedInTransitCount > 0 ? "bg-amber-50 text-amber-600 border-amber-200" : "bg-emerald-50 text-emerald-600 border-emerald-200"}
+                    criticalCount={r.stoppedInTransitCount}
+                    histCount={histEvent?.eventCount || 0}
+                  />
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -254,19 +329,19 @@ const AnalysisKPI: React.FC<{
   bgColor: string;
   trendColor?: string;
 }> = ({ label, value, trend, trendIcon, subLabel, icon, bgColor, trendColor }) => (
-  <div className="bg-white p-6 rounded-xl border border-outline-variant shadow-sm flex flex-col gap-4 hover:border-primary-container transition-all">
+  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-4 hover:border-slate-400 transition-all group">
     <div className="flex items-center justify-between">
-      <span className="text-slate-500 label-caps font-bold">{label}</span>
-      <span className={cn("p-2 rounded-lg", bgColor)}>{icon}</span>
+      <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">{label}</span>
+      <span className={cn("p-2.5 rounded-xl transition-transform group-hover:scale-110", bgColor)}>{icon}</span>
     </div>
     <div>
-      <p className="headline-md text-primary-container font-black">{value}</p>
+      <p className="text-3xl font-black text-slate-800 tracking-tighter leading-none">{value}</p>
       {trend ? (
-        <p className={cn("text-xs font-bold flex items-center gap-1 mt-1", trendColor)}>
+        <p className={cn("text-[10px] font-black flex items-center gap-1 mt-2 uppercase tracking-tight", trendColor)}>
           {trendIcon} {trend}
         </p>
       ) : (
-        <p className="text-slate-400 text-xs mt-1">{subLabel}</p>
+        <p className="text-slate-400 text-[10px] font-bold uppercase tracking-tight mt-2">{subLabel}</p>
       )}
     </div>
   </div>
@@ -277,34 +352,35 @@ const RoadAlert: React.FC<{
   desc: string;
   status: string;
   severity: 'error' | 'warning' | 'info';
-  icon: string;
-}> = ({ road, desc, status, severity }) => (
+  address?: string;
+}> = ({ road, desc, status, severity, address }) => (
   <div className={cn(
-    "p-4 border-l-4 rounded-r-lg flex gap-4",
-    severity === 'error' ? "bg-error/5 border-error" : 
-    severity === 'warning' ? "bg-amber-50 border-amber-500" : "bg-slate-50 border-slate-300"
+    "p-4 border border-slate-200 rounded-xl flex gap-3 transition-all hover:bg-white hover:shadow-md",
+    severity === 'error' ? "bg-red-50/30 border-l-4 border-l-red-600" : 
+    severity === 'warning' ? "bg-amber-50/30 border-l-4 border-l-amber-500" : "bg-slate-50/30 border-l-4 border-l-slate-400"
   )}>
     <div className={cn(
-      "mt-1",
-      severity === 'error' ? "text-error" : 
-      severity === 'warning' ? "text-amber-600" : "text-slate-500"
+      "mt-0.5",
+      severity === 'error' ? "text-red-500" : 
+      severity === 'warning' ? "text-amber-500" : "text-slate-400"
     )}>
-      <AlertCircle size={18} />
+      <AlertCircle size={16} />
     </div>
-    <div>
-      <p className="text-sm font-bold text-primary-container">{road}</p>
-      <p className="text-xs text-slate-600 font-medium leading-relaxed mt-0.5">{desc}</p>
-      <p className={cn(
-        "text-[10px] mt-1.5 font-black tracking-widest",
-        severity === 'error' ? "text-error" : 
-        severity === 'warning' ? "text-amber-700" : "text-slate-500"
-      )}>STATUS: {status}</p>
+    <div className="overflow-hidden">
+      <p className="text-xs font-black text-slate-800 uppercase tracking-tight">{road}</p>
+      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest line-clamp-1">{desc}</p>
+      <p className="text-[9px] text-slate-400 font-medium mt-1 truncate">{address}</p>
+      <div className="flex items-center gap-1.5 mt-2">
+        <span className={cn(
+          "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest",
+          severity === 'error' ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"
+        )}>{status}</span>
+      </div>
     </div>
   </div>
 );
 
 const ImpactRow: React.FC<{
-  code: string;
   name: string;
   trips: string;
   delay: string;
@@ -312,40 +388,41 @@ const ImpactRow: React.FC<{
   trendIcon: React.ReactNode;
   status: string;
   statusColor: string;
-  trendColor?: string;
-}> = ({ code, name, trips, delay, trend, trendIcon, status, statusColor, trendColor }) => (
-  <tr className="hover:bg-slate-50 transition-colors">
+  criticalCount: number;
+  histCount: number;
+}> = ({ name, trips, delay, trend, trendIcon, status, statusColor, criticalCount, histCount }) => (
+  <tr className="hover:bg-slate-50 transition-colors group">
     <td className="px-6 py-4">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded bg-primary-container text-white flex items-center justify-center font-bold text-[10px]">{code}</div>
-        <span className="text-sm font-bold text-primary-container">{name}</span>
+        <div className={cn(
+          "w-8 h-8 rounded-lg flex items-center justify-center text-white font-black text-[10px] uppercase",
+          criticalCount > 0 ? "bg-red-600" : "bg-slate-600"
+        )}>
+          {name.substring(0, 2)}
+        </div>
+        <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{name}</span>
       </div>
     </td>
-    <td className="px-6 py-4 text-sm font-medium text-slate-700">{trips}</td>
-    <td className="px-6 py-4 text-sm font-medium text-slate-700">{delay}</td>
-    <td className={cn("px-6 py-4 font-bold flex items-center gap-1 text-sm", trendColor || "text-error")}>
-      {trendIcon} {trend}
+    <td className="px-6 py-4 text-center">
+      <span className="text-xs font-black text-slate-600">{trips}</span>
+    </td>
+    <td className="px-6 py-4 text-center text-xs font-black text-slate-400">
+      {delay}
+    </td>
+    <td className="px-6 py-4 text-center">
+      <span className="text-xs font-black text-slate-600">{histCount}</span>
     </td>
     <td className="px-6 py-4">
-      <span className={cn("px-3 py-1 text-[10px] font-extrabold rounded-full tracking-wider border border-current/10", statusColor)}>
+      <div className="flex flex-col items-center gap-1">
+        <div className={cn("flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest", criticalCount > 0 ? "text-red-600 bg-red-100" : "text-emerald-600 bg-emerald-100")}>
+          {trendIcon} {trend}
+        </div>
+      </div>
+    </td>
+    <td className="px-6 py-4 text-right">
+      <span className={cn("px-3 py-1 text-[9px] font-black rounded-md tracking-widest border uppercase", statusColor)}>
         {status}
       </span>
     </td>
-    <td className="px-6 py-4 text-right">
-      <button className="p-2 hover:bg-slate-100 rounded-full text-slate-400 group-hover:text-primary-container transition-colors">
-        <MoreVertical size={16} />
-      </button>
-    </td>
   </tr>
-);
-
-const LegendItem: React.FC<{ color: string; label: string }> = ({ color, label }) => (
-  <div className="flex items-center gap-2">
-    <span className={cn("w-3 h-3 rounded-full", color)}></span>
-    <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">{label}</span>
-  </div>
-);
-
-const ArrowIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
 );

@@ -1,6 +1,8 @@
-import React from 'react';
-import { Search, Bell, Grid, HelpCircle, Menu, LogOut, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Bell, Grid, HelpCircle, Menu, LogOut, User, Activity } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { NotificationDropdown } from './NotificationDropdown';
+import { useShipments } from '../contexts/ShipmentContext';
 
 interface TopbarProps {
   viewTitle: string;
@@ -10,6 +12,13 @@ interface TopbarProps {
 
 export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle, onViewChange }) => {
   const { user, logout } = useAuth();
+  const { vehicles } = useShipments();
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-outline-variant h-16 flex items-center justify-between px-4 lg:px-8">
@@ -20,9 +29,21 @@ export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle, onViewC
         >
           <Menu size={24} />
         </button>
-        <h2 className="title-sm lg:headline-md text-primary-container truncate max-w-[120px] sm:max-w-none">{viewTitle}</h2>
-        <div className="hidden sm:block h-6 w-[1px] bg-outline-variant mx-2"></div>
-        <div className="hidden md:flex items-center bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant/30">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2">
+            <h2 className="title-sm lg:headline-md text-primary-container truncate max-w-[120px] sm:max-w-none leading-none">{viewTitle}</h2>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-100/50 border border-red-200 animate-pulse transition-all">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
+              <span className="text-[10px] font-black text-red-600 uppercase tracking-tighter">Live</span>
+            </div>
+          </div>
+          <div className="hidden sm:flex items-center gap-1.5 mt-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+            <Activity size={10} className="text-slate-300" />
+            <span>Atualizando via Sascar • {now.toLocaleTimeString('pt-BR')}</span>
+          </div>
+        </div>
+        <div className="hidden sm:block h-6 w-[1px] bg-outline-variant mx-2 ml-4"></div>
+        <div className="hidden md:flex items-center bg-surface-container-low px-3 py-1.5 rounded-lg border border-outline-variant/30 ml-2">
           <Search size={18} className="text-slate-400 mr-2" />
           <input
             className="bg-transparent border-none focus:ring-0 text-sm p-0 w-64 placeholder-slate-400 text-on-surface"
@@ -34,9 +55,7 @@ export const Topbar: React.FC<TopbarProps> = ({ viewTitle, onMenuToggle, onViewC
 
       <div className="flex items-center gap-6">
         <div className="hidden sm:flex gap-4">
-          <button className="text-slate-600 cursor-pointer hover:text-primary-container transition-colors">
-            <Bell size={20} />
-          </button>
+          <NotificationDropdown />
           <button className="text-slate-600 cursor-pointer hover:text-primary-container transition-colors">
             <Grid size={20} />
           </button>

@@ -1,14 +1,18 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { 
-  CheckCircle2, 
-  AlertCircle, 
+  Trophy, 
+  TrendingUp, 
+  AlertTriangle, 
+  Gauge, 
   Clock, 
+  Map as MapIcon,
+  Zap,
   ShieldCheck,
-  TrendingUp,
+  ChevronRight,
   TrendingDown,
-  Minus,
-  FileDown,
-  MoreVertical
+  Activity,
+  FileDown
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -17,160 +21,294 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer,
-  Cell
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell,
+  Legend
 } from 'recharts';
+import { DriverScoreboard, FleetMetrics } from '../types';
 import { cn } from '../lib/utils';
 
-const trendData = [
-  { name: 'Semana 1', onTime: 80, delayed: 10 },
-  { name: 'Semana 2', onTime: 85, delayed: 8 },
-  { name: 'Semana 3', onTime: 75, delayed: 15 },
-  { name: 'Semana 4', onTime: 92, delayed: 5 },
-];
-
-const reasonsData = [
-  { name: 'Congestionamento', value: 42 },
-  { name: 'Docas Lotadas', value: 28 },
-  { name: 'Manutenção', value: 18 },
-  { name: 'Falha Sistêmica', value: 12 },
-];
-
 export const PerformanceView: React.FC = () => {
-  return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
-      {/* Page Title */}
-      <header className="mb-8 flex flex-col sm:flex-row justify-between items-start gap-4">
-        <div>
-          <h2 className="display-lg text-primary-container">Painel de Performance</h2>
-          <p className="text-slate-500 font-medium">Métricas detalhadas de nivel de serviço e SLA operacional.</p>
-        </div>
-        <button className="bg-primary-container text-white px-6 py-2.5 rounded font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:opacity-90 w-full sm:w-auto justify-center">
-          <FileDown size={14} /> Relatório Global
-        </button>
-      </header>
+  const [data, setData] = useState<{
+    scoreboard: DriverScoreboard[];
+    overallFleetMetrics: FleetMetrics;
+    lastUpdate: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-      {/* Summary Cards */}
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      try {
+        const response = await axios.get('/api/sascar/metrics');
+        setData(response.data);
+      } catch (err) {
+        console.error('Error fetching fleet metrics:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 300000); // 5 minutes
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading || !data) {
+    return (
+      <div className="flex items-center justify-center h-full min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-container"></div>
+          <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Carregando Indicadores Sascar...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { scoreboard, overallFleetMetrics } = data;
+
+  const rpmData = [
+    { name: 'Extra Verde', value: overallFleetMetrics.rpmBands.extraGreen * 100, color: '#065f46' },
+    { name: 'Verde', value: overallFleetMetrics.rpmBands.green * 100, color: '#1e40af' },
+    { name: 'Transição', value: overallFleetMetrics.rpmBands.transition * 100, color: '#f59e0b' },
+    { name: 'Amarela', value: overallFleetMetrics.rpmBands.yellow * 100, color: '#c2410c' },
+    { name: 'Perigo', value: overallFleetMetrics.rpmBands.danger * 100, color: '#991b1b' },
+  ];
+
+  const timeDistribution = [
+    { name: 'Movimento', value: overallFleetMetrics.movingTimePercentage * 100, color: '#3b82f6' },
+    { name: 'Parado Ligado', value: overallFleetMetrics.stoppedTimePercentage * 100, color: '#fb923c' },
+    { name: 'Desligado', value: overallFleetMetrics.stoppedOffTimePercentage * 100, color: '#94a3b8' },
+  ];
+
+  return (
+    <div className="p-8 space-y-8 bg-slate-50 min-h-full overflow-y-auto max-w-[1600px] mx-auto">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <div className="bg-primary-container p-2 rounded-lg text-white">
+              <TrendingUp size={20} />
+            </div>
+            <h2 className="display-lg text-primary-container">Performance da Frota</h2>
+          </div>
+          <p className="text-slate-500 font-medium">Indicadores de condução e eficiência extraídos via Sascar.</p>
+        </div>
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <button className="bg-white text-slate-600 px-6 py-2.5 rounded-xl border border-outline-variant font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
+            <FileDown size={16} /> Relatórios BI
+          </button>
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Última Atualização</p>
+            <p className="font-mono text-sm font-bold text-primary-container">
+              {new Date(data.lastUpdate).toLocaleTimeString('pt-BR')}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main KPIs Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <PerfCard 
-          label="SLA GLOBAL" 
-          value="94.2%" 
-          trend="+1.2%" 
-          trendUp 
-          icon={<ShieldCheck size={18} />} 
-          progress={94.2}
+        <KpiCard 
+          label="% Movimento" 
+          value={`${(overallFleetMetrics.movingTimePercentage * 100).toFixed(1)}%`}
+          subValue="Meta: > 60%"
+          icon={<Zap size={20} className="text-blue-500" />}
+          trend={+2.4}
         />
-        <PerfCard 
-          label="ENTREGAS NO PRAZO" 
-          value="2.480" 
-          subLabel="Volume total deste mês"
-          icon={<CheckCircle2 size={18} className="text-teal-600" />} 
+        <KpiCard 
+          label="Km Rodados" 
+          value={overallFleetMetrics.kmsTraveled.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
+          subValue="Total do Período"
+          icon={<MapIcon size={20} className="text-emerald-500" />}
+          trend={+15.2}
         />
-        <PerfCard 
-          label="ENTREGAS EM ATRASO" 
-          value="152" 
-          trend="-4%" 
-          trendUp={false} 
-          icon={<AlertCircle size={18} className="text-error" />} 
-          isError
+        <KpiCard 
+          label="Infrações / 1000km" 
+          value={overallFleetMetrics.infractionRatePer1000km.toFixed(2)}
+          subValue="Média da Frota"
+          icon={<AlertTriangle size={20} className="text-red-500" />}
+          trend={-5.1}
+          inverseTrend
         />
-        <PerfCard 
-          label="ATRASO MÉDIO" 
-          value="42 min" 
-          subLabel="Calculado sobre ocorrências"
-          icon={<Clock size={18} className="text-secondary" />} 
+        <KpiCard 
+          label="Score de Condução" 
+          value={overallFleetMetrics.drivingScore.toFixed(1)}
+          subValue="Média Geral (0-5)"
+          icon={<Trophy size={20} className="text-amber-500" />}
+          trend={+0.3}
         />
       </div>
 
-      {/* Main Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
-          <div className="flex justify-between items-center mb-10">
-            <h3 className="title-sm text-primary-container font-black">Tendência Mensal: On-time vs Delayed</h3>
-            <div className="flex gap-4 text-[10px] font-black tracking-widest uppercase">
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-primary-container rounded-sm"></span> No Prazo</div>
-              <div className="flex items-center gap-2"><span className="w-3 h-3 bg-error rounded-sm"></span> Atraso</div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* RPM Distribution */}
+        <div className="lg:col-span-8 bg-white p-8 rounded-2xl border border-outline-variant shadow-sm flex flex-col">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+            <div>
+              <h3 className="font-black text-primary-container uppercase tracking-tight flex items-center gap-2">
+                <Gauge size={18} /> Faixas de RPM (Tempo em Movimento)
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">Distribuição percentual do tempo de motor ligado em movimento.</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-[#065f46]" />
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Extra Verde</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-[#1e40af]" />
+                <span className="text-[10px] font-bold text-slate-500 uppercase">Verde</span>
+              </div>
             </div>
           </div>
-          <div className="h-64 w-full">
+
+          <div className="flex-1 min-h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trendData} barGap={12}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+              <BarChart data={rpmData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                 <XAxis 
                   dataKey="name" 
                   axisLine={false} 
                   tickLine={false} 
-                  tick={{ fontSize: 11, fontWeight: 700, fill: '#64748b' }} 
+                  tick={{ fill: '#64748b', fontSize: 10, fontWeight: 700 }}
                 />
-                <YAxis hide />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: '#64748b', fontSize: 10 }}
+                />
                 <Tooltip 
-                  cursor={{ fill: 'transparent' }}
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  cursor={{ fill: '#f8fafc' }}
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                 />
-                <Bar dataKey="onTime" fill="#002626" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="delayed" fill="#ba1a1a" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={60}>
+                  {rpmData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white border border-outline-variant rounded-xl p-8 shadow-sm">
-          <h3 className="title-sm text-primary-container font-black mb-10">Motivos de Atraso</h3>
-          <div className="space-y-8">
-            {reasonsData.map((item) => (
-              <div key={item.name} className="space-y-2">
-                <div className="flex justify-between text-xs font-black uppercase tracking-widest text-slate-500">
-                  <span>{item.name}</span>
-                  <span className="text-primary-container">{item.value}%</span>
-                </div>
-                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
-                  <div 
-                    className="bg-primary-container h-full rounded-full transition-all duration-1000" 
-                    style={{ width: `${item.value}%`, opacity: 1 - (reasonsData.indexOf(item) * 0.2) }} 
-                  />
-                </div>
-              </div>
-            ))}
+        {/* Time Distribution */}
+        <div className="lg:col-span-4 bg-white p-8 rounded-2xl border border-outline-variant shadow-sm flex flex-col">
+          <div className="mb-8">
+            <h3 className="font-black text-primary-container uppercase tracking-tight flex items-center gap-2">
+              <Clock size={18} /> Utilização do Tempo
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">Divisão do tempo total do motor.</p>
+          </div>
+
+          <div className="flex-1 min-h-[250px] flex items-center justify-center">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={timeDistribution}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {timeDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend 
+                  verticalAlign="bottom" 
+                  align="center"
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="mt-6 space-y-3">
+             <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl border border-blue-100">
+               <span className="text-[10px] font-black text-blue-700 uppercase">Eficiência Horária</span>
+               <span className="text-sm font-black text-blue-900">84.2%</span>
+             </div>
           </div>
         </div>
       </div>
 
-      {/* Breakdown Table */}
-      <div className="bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden">
-        <div className="p-8 border-b border-outline-variant flex justify-between items-center bg-slate-50/30">
+      {/* Driver Scoreboard */}
+      <div className="bg-white rounded-2xl border border-outline-variant shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-outline-variant flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-50/50 gap-4">
           <div>
-            <h3 className="title-sm text-primary-container font-black">Performance por Operação: J&T Express</h3>
-            <p className="text-xs text-slate-500 mt-1 font-medium">Dados consolidados por rota regional</p>
+            <h3 className="font-black text-primary-container uppercase tracking-tight flex items-center gap-2">
+              <Trophy size={18} className="text-amber-500" /> Ranking de Performance - Top 5
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">Os motoristas com melhores indicadores de condução no período.</p>
           </div>
-          <button className="bg-primary-container text-white px-6 py-2.5 rounded font-bold text-xs uppercase tracking-widest flex items-center gap-2 hover:opacity-90">
-            <FileDown size={14} /> Exportar PDF
+          <button className="text-[10px] font-black text-primary-container uppercase tracking-widest hover:underline flex items-center gap-1">
+            Ver Ranking Completo <ChevronRight size={14} />
           </button>
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 label-caps text-slate-500 border-b border-outline-variant">
-                <th className="px-6 py-4">Rota / Região</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Volume</th>
-                <th className="px-6 py-4 text-right">SLA Real</th>
-                <th className="px-6 py-4 text-right">Meta SLA</th>
-                <th className="px-6 py-4 text-center">Tendência</th>
+          <table className="w-full text-left min-w-[800px]">
+            <thead className="bg-slate-50/30">
+              <tr>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Motorista</th>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Classificação</th>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Km Rodados</th>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">% Verde</th>
+                <th className="px-8 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Score</th>
               </tr>
             </thead>
-            <tbody className="text-sm divide-y divide-outline-variant/30">
-              <PerfRow 
-                route="São Paulo - Interior (HUB-01)" status="EM OPERAÇÃO" volume="1.240" real="97.8%" meta="96.0%" trend="up"
-              />
-              <PerfRow 
-                route="Rio de Janeiro - Metropolitana" status="EM OPERAÇÃO" volume="890" real="94.2%" meta="96.0%" trend="stable"
-              />
-              <PerfRow 
-                route="Belo Horizonte - Rota Sul" status="ALERTA" volume="350" real="88.5%" meta="96.0%" trend="down" isAlert
-              />
-              <PerfRow 
-                route="Curitiba - Eixo Logístico" status="EM OPERAÇÃO" volume="520" real="95.1%" meta="96.0%" trend="up"
-              />
+            <tbody className="divide-y divide-outline-variant/30">
+              {scoreboard.map((driver, idx) => (
+                <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs",
+                        idx === 0 ? "bg-amber-100 text-amber-600" :
+                        idx === 1 ? "bg-slate-100 text-slate-500" :
+                        idx === 2 ? "bg-orange-100 text-orange-600" : "bg-slate-50 text-slate-400"
+                      )}>
+                        {idx + 1}
+                      </div>
+                      <span className="font-bold text-slate-900">{driver.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      driver.category.includes('Elite') ? "bg-amber-100 text-amber-700" :
+                      driver.category.includes('Muito Bom') ? "bg-emerald-100 text-emerald-700" :
+                      driver.category.includes('Bom') ? "bg-blue-100 text-blue-700" :
+                      driver.category.includes('Médio') ? "bg-orange-100 text-orange-700" : "bg-red-100 text-red-700"
+                    )}>
+                      {driver.category}
+                    </span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="font-mono text-xs font-bold text-slate-600">
+                      {driver.metrics.kmsTraveled.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} km
+                    </span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-xs font-black text-primary-container">{(driver.metrics.rpmBands.green * 100).toFixed(1)}%</span>
+                      <div className="w-24 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full" 
+                          style={{ width: `${driver.metrics.rpmBands.green * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <span className="font-black text-lg text-primary-container">{driver.metrics.drivingScore.toFixed(1)}</span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -179,65 +317,41 @@ export const PerformanceView: React.FC = () => {
   );
 };
 
-const PerfCard: React.FC<{
-  label: string;
-  value: string;
-  trend?: string;
-  trendUp?: boolean;
-  subLabel?: string;
-  icon: React.ReactNode;
-  progress?: number;
-  isError?: boolean;
-}> = ({ label, value, trend, trendUp, subLabel, icon, progress, isError }) => (
-  <div className="bg-white border border-outline-variant p-6 rounded-xl flex flex-col gap-3 shadow-sm hover:shadow-md transition-all">
-    <div className="flex justify-between items-start">
-      <span className="label-caps !text-[11px] text-slate-400">{label}</span>
-      <div className="p-1.5 rounded-lg bg-surface-container-low">{icon}</div>
-    </div>
-    <div className="flex items-baseline gap-2">
-      <span className={cn("headline-md !text-3xl font-black", isError ? "text-error" : "text-primary-container")}>{value}</span>
-      {trend && (
-        <span className={cn("text-[11px] font-black px-1.5 py-0.5 rounded", trendUp ? "text-teal-600 bg-teal-50" : "text-error bg-error/5")}>
-          {trendUp ? '↑' : '↓'} {trend}
-        </span>
-      )}
-    </div>
-    {progress !== undefined ? (
-      <div className="w-full bg-slate-100 h-1.5 rounded-full mt-1 overflow-hidden">
-        <div className="bg-primary-container h-full" style={{ width: `${progress}%` }}></div>
-      </div>
-    ) : (
-      <p className="text-[11px] text-slate-400 font-bold uppercase tracking-tight">{subLabel}</p>
-    )}
-  </div>
-);
+const KpiCard: React.FC<{ 
+  label: string; 
+  value: string; 
+  subValue: string; 
+  icon: React.ReactNode; 
+  trend?: number;
+  inverseTrend?: boolean;
+}> = ({ label, value, subValue, icon, trend, inverseTrend }) => {
+  const isPositive = trend && trend > 0;
+  const isGood = inverseTrend ? !isPositive : isPositive;
 
-const PerfRow: React.FC<{
-  route: string;
-  status: string;
-  volume: string;
-  real: string;
-  meta: string;
-  trend: 'up' | 'stable' | 'down';
-  isAlert?: boolean;
-}> = ({ route, status, volume, real, meta, trend, isAlert }) => (
-  <tr className="hover:bg-teal-50/30 transition-colors">
-    <td className="px-6 py-4 font-bold text-primary-container tracking-tight">{route}</td>
-    <td className="px-6 py-4">
-      <span className={cn(
-        "px-2.5 py-1 rounded-full text-[10px] font-black tracking-widest uppercase border",
-        isAlert ? "bg-error-container text-error border-error/10" : "bg-teal-100 text-teal-800 border-teal-800/10"
-      )}>{status}</span>
-    </td>
-    <td className="px-6 py-4 text-right data-mono text-slate-700">{volume}</td>
-    <td className={cn("px-6 py-4 text-right font-black", isAlert ? "text-error" : "text-teal-700")}>{real}</td>
-    <td className="px-6 py-4 text-right text-slate-400 font-bold">{meta}</td>
-    <td className="px-6 py-4 text-center">
-      <div className="flex justify-center">
-        {trend === 'up' && <TrendingUp size={16} className="text-teal-600" />}
-        {trend === 'stable' && <Minus size={16} className="text-slate-400" />}
-        {trend === 'down' && <TrendingDown size={16} className="text-error" />}
+  return (
+    <div className="bg-white p-6 rounded-2xl border border-outline-variant shadow-sm hover:shadow-md transition-all flex flex-col relative overflow-hidden">
+      <div className="flex items-center justify-between mb-4">
+        <div className="p-2 bg-slate-50 rounded-xl border border-slate-100 shadow-sm">
+          {icon}
+        </div>
+        {trend !== undefined && (
+          <div className={cn(
+            "flex items-center gap-1 text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full",
+            isGood ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"
+          )}>
+            {isPositive ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+            {Math.abs(trend)}%
+          </div>
+        )}
       </div>
-    </td>
-  </tr>
-);
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</p>
+        <h4 className="display-sm text-primary-container font-black">{value}</h4>
+        <p className="text-[10px] font-medium text-slate-400 mt-1">{subValue}</p>
+      </div>
+      <div className="absolute right-0 bottom-0 opacity-[0.03] scale-150 p-4 pointer-events-none">
+        {icon}
+      </div>
+    </div>
+  );
+};

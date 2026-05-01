@@ -1,205 +1,347 @@
 import React from 'react';
-import { 
-  Truck, 
-  Timer, 
-  AlertTriangle, 
-  AlertCircle,
-  Map as MapIcon,
-  Plus,
-  Minus,
-  Layers,
-  MoreVertical,
-  ArrowRight,
-  QrCode,
-  ShieldCheck,
-  User as UserIcon
-} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { FleetMapView } from './FleetMapView';
 import { useShipments } from '../contexts/ShipmentContext';
-import { RefreshCw } from 'lucide-react';
+import { 
+  RefreshCw, 
+  Power, 
+  Navigation, 
+  Pause, 
+  Clock, 
+  MapPin, 
+  Activity, 
+  AlertOctagon,
+  ShieldCheck,
+  CheckCircle2,
+  AlertCircle as AlertIcon,
+  Truck,
+  AlertTriangle,
+  Map as MapIcon,
+  User as UserIcon
+} from 'lucide-react';
 
 export const DashboardView: React.FC = () => {
   const { shipments, vehicles, syncSascar, loading } = useShipments();
   
-  // KPI Calculations
-  const totalActive = shipments.length;
-  const onTimeCount = shipments.filter(s => s.status === 'EM TRÂNSITO' || s.status === 'ENTREGA FINAL').length;
-  const delayedCount = shipments.filter(s => s.status === 'PARADO (PONTO DE APOIO)').length;
-  const atRiskCount = shipments.filter(s => s.status === 'AGUARDANDO' || s.status === 'CARREGANDO').length;
-
-  // Percentages for progress bars
-  const onTimePercent = totalActive > 0 ? (onTimeCount / totalActive) * 100 : 0;
-  const delayedPercent = totalActive > 0 ? (delayedCount / totalActive) * 100 : 0;
-  const atRiskPercent = totalActive > 0 ? (atRiskCount / totalActive) * 100 : 0;
-
-  // Get latest 5 shipments for the dashboard table
-  const latestShipments = [...shipments].slice(0, 5);
-
-  // Critical shipments are those that are "PARADO" or have low progress but are "EM TRÂNSITO"
-  const criticalShipments = shipments.filter(s => 
-    s.status === 'PARADO (PONTO DE APOIO)' || 
-    (s.status === 'EM TRÂNSITO' && s.progress < 20)
-  ).slice(0, 5);
+  // Real-time KPI Calculations from verified Sascar data
+  const totalFrota = vehicles.length;
+  const ignLigada = vehicles.filter(v => v.ignition).length;
+  const emMovimento = vehicles.filter(v => v.speed > 5).length;
+  
+  // Operational segments (from deriveStatus logic in server)
+  const emViagem = vehicles.filter(v => v.status === 'Em Viagem').length;
+  const encerrado = vehicles.filter(v => v.status === 'Encerrado').length;
+  const parado = vehicles.filter(v => v.status === 'Parado').length;
+  const aguardando = vehicles.filter(v => v.status === 'Aguardando').length;
+  
+  // Alerta Parado em Viagem (Ignition ON or Em Viagem but speed 0)
+  const paradoEmViagem = vehicles.filter(v => v.status === 'Em Viagem' && v.speed === 0).length;
+  
+  // Sem Sinal (last update more than 15 mins ago)
+  const semSinal = vehicles.filter(v => {
+    const last = new Date(v.lastUpdate).getTime();
+    const now = new Date().getTime();
+    return (now - last) > 15 * 60 * 1000;
+  }).length;
+  
+  // Average Speed
+  const movingVehicles = vehicles.filter(v => v.speed > 0);
+  const avgSpeed = movingVehicles.length > 0 
+    ? movingVehicles.reduce((acc, v) => acc + v.speed, 0) / movingVehicles.length 
+    : 0;
 
   return (
-    <div className="p-8 space-y-8">
-      {/* Real-time Indicators Grid */}
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <KPIItem 
-          icon={<Truck className="text-primary-container" />}
-          label="Viagens Ativas"
-          value={totalActive.toString().padStart(2, '0')}
-          trend={`${totalActive > 0 ? '+1' : '0'} vs ontem`}
-          trendColor="text-teal-600"
-          progress={100}
-          progressColor="bg-primary-container"
-          bgColor="bg-teal-50"
-        />
-        <KPIItem 
-          icon={<Timer className="text-secondary" />}
-          label="Dentro do Horário"
-          value={onTimeCount.toString().padStart(2, '0')}
-          trend={`${onTimePercent.toFixed(1)}% do total`}
-          trendColor="text-teal-600"
-          progress={onTimePercent}
-          progressColor="bg-teal-500"
-          bgColor="bg-secondary-container"
-        />
-        <KPIItem 
-          icon={<AlertTriangle className="text-error" />}
-          label="Em Atraso"
-          value={delayedCount.toString().padStart(2, '0')}
-          trend={delayedCount > 0 ? "Ação imediata" : "Nenhum alerta"}
-          trendColor={delayedCount > 0 ? "text-error" : "text-slate-400"}
-          progress={delayedPercent}
-          progressColor="bg-error"
-          bgColor="bg-error-container"
-        />
-        <KPIItem 
-          icon={<AlertCircle className="text-tertiary" />}
-          label="Aguardando / Carga"
-          value={atRiskCount.toString().padStart(2, '0')}
-          trend="Status Pendente"
-          trendColor="text-slate-500"
-          progress={atRiskPercent}
-          progressColor="bg-amber-600"
-          bgColor="bg-surface-container-highest"
-        />
-      </section>
-
-      {/* Main Operational Area (Bento Grid) */}
-      <div className="grid grid-cols-12 gap-6 items-start">
-        {/* Map View */}
-        <div className="col-span-12 lg:col-span-8 bg-white border border-outline-variant rounded-xl h-[580px] flex flex-col overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-white/50">
-            <div className="flex items-center gap-2">
-              <MapIcon size={18} className="text-primary-container" />
-              <h4 className="title-sm text-primary-container">Monitoramento da Frota em Tempo Real</h4>
-            </div>
-            <button 
-              onClick={syncSascar}
-              disabled={loading}
-              className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-lg border border-outline-variant bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm",
-                loading && "opacity-50 cursor-not-allowed"
-              )}
-            >
-              <RefreshCw size={14} className={cn(loading && "animate-spin")} />
-              {loading ? 'Sincronizando...' : 'Sincronizar Sascar'}
-            </button>
-          </div>
-          <div className="flex-1 relative overflow-hidden bg-slate-100">
-            {/* Interactive Fleet Map */}
-            <FleetMapView vehicles={vehicles} />
-          </div>
+    <div className="p-6 space-y-6 bg-[#f4f6f9] min-h-screen">
+      {/* Minimized Header Info */}
+      <div className="flex justify-between items-center bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+          <h2 className="text-[10px] font-black tracking-widest text-slate-500 uppercase">Live Operations Status</h2>
         </div>
-
-        {/* Critical Shipments Panel */}
-        <div className="col-span-12 lg:col-span-4 bg-white border border-outline-variant rounded-xl h-[580px] flex flex-col shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-outline-variant flex items-center justify-between">
-            <h4 className="title-sm text-primary-container flex items-center gap-2">
-              <AlertCircle size={20} className="text-error" />
-              Carregamentos Críticos
-            </h4>
-            <span className="text-xs font-bold text-error bg-error-container px-2 py-0.5 rounded">
-              {criticalShipments.length.toString().padStart(2, '0')} ALERTAS
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {criticalShipments.map((s) => (
-              <CriticalItem 
-                key={s.id}
-                id={s.id}
-                type={s.status === 'PARADO (PONTO DE APOIO)' ? 'Veículo Parado' : 'Atraso de Início'}
-                route={s.route}
-                cargo={`Veículo: ${s.vehicle} | ${s.client || 'Geral'}`}
-                progress={s.progress}
-                btnLabel="REVISAR VIAGEM"
-                severity={s.status === 'PARADO (PONTO DE APOIO)' ? 'error' : 'warning'}
-              />
-            ))}
-            {criticalShipments.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8">
-                <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mb-4">
-                  <ShieldCheck size={32} />
-                </div>
-                <p className="text-slate-500 font-bold text-sm">Sem alertas críticos</p>
-                <p className="text-slate-400 text-xs mt-1">Toda a frota operando conforme o planejado.</p>
-              </div>
+        <div className="flex items-center gap-4">
+          <span className="text-[9px] font-mono text-slate-400 uppercase">Sync: {new Date().toLocaleTimeString()}</span>
+          <button 
+            onClick={syncSascar}
+            disabled={loading}
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50",
+              loading && "animate-pulse"
             )}
-          </div>
-          <div className="p-4 bg-slate-50 border-t border-outline-variant">
-            <button className="w-full py-2 text-sm text-slate-600 font-medium hover:text-primary-container">
-              Ver Todas as Ocorrências
-            </button>
-          </div>
+          >
+            <RefreshCw size={10} className={cn(loading && "animate-spin")} />
+            {loading ? 'Aguarde...' : 'Sincronizar'}
+          </button>
         </div>
       </div>
 
-      {/* Operational Activity Table */}
-      <section className="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-        <div className="px-6 py-5 border-b border-outline-variant flex justify-between items-center">
-          <h4 className="title-sm text-primary-container">Últimas Movimentações da Frota</h4>
-          <div className="flex gap-2">
-            <button className="px-4 py-2 bg-white border border-outline-variant rounded-md text-xs font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50">
-              Filtrar
-            </button>
-            <button className="px-4 py-2 bg-white border border-outline-variant rounded-md text-xs font-bold text-slate-600 flex items-center gap-2 hover:bg-slate-50">
-              Exportar
-            </button>
+      {/* Primary KPI Row - Styled as requested (compact, clean cards) */}
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <KPIBox 
+          label="Viagens Ativas" 
+          value={emViagem} 
+          secondaryLabel="0 vs ontem"
+          color="text-[#004d40]" 
+          barColor="bg-[#004d40]" 
+          icon={<Truck size={20} />} 
+          iconBgColor="bg-emerald-50"
+        />
+        <KPIBox 
+          label="Dentro do Horário" 
+          value={emMovimento} 
+          secondaryLabel="100,0% do total"
+          color="text-[#004d40]" 
+          barColor="bg-teal-500" 
+          icon={<Clock size={20} />} 
+          iconBgColor="bg-teal-50"
+        />
+        <KPIBox 
+          label="Em Atraso" 
+          value={paradoEmViagem} 
+          secondaryLabel="Alertas" 
+          color={paradoEmViagem > 0 ? "text-red-600" : "text-[#004d40]"} 
+          barColor={paradoEmViagem > 0 ? "bg-red-500" : "bg-slate-100"} 
+          icon={<AlertTriangle size={20} />} 
+          iconBgColor="bg-red-50"
+        />
+        <KPIBox 
+          label="Aguardando / Carga" 
+          value={aguardando} 
+          secondaryLabel="Pendente"
+          color="text-[#004d40]" 
+          barColor="bg-[#e65100]" 
+          icon={<AlertOctagon size={20} />} 
+          iconBgColor="bg-orange-50"
+        />
+        <KPIBox 
+          label="Velocidade Média" 
+          value={avgSpeed > 0 ? `${avgSpeed.toFixed(0)}` : "00"} 
+          secondaryLabel="KM/A"
+          color="text-[#004d40]" 
+          barColor="bg-indigo-500" 
+          icon={<Activity size={20} />} 
+          iconBgColor="bg-indigo-50"
+        />
+      </section>
+
+      <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-8 space-y-6">
+          {/* Map Section */}
+          <div className="bg-white border border-outline-variant rounded-xl h-[520px] flex flex-col overflow-hidden shadow-sm">
+            <div className="p-3 border-b border-outline-variant flex justify-between items-center bg-slate-50/50">
+              <div className="flex items-center gap-2">
+                <MapIcon size={16} className="text-green-600" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">Visualização Geográfica da Frota</span>
+              </div>
+            </div>
+            <div className="flex-1 relative bg-slate-100">
+              <FleetMapView vehicles={vehicles} />
+            </div>
+          </div>
+
+          {/* Detailed Table - Styled according to reference image */}
+          <div className="bg-white border border-outline-variant rounded-2xl shadow-sm overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+               <h3 className="text-xl font-bold text-slate-800">Últimos Movimentos da Frota</h3>
+               <div className="flex gap-2">
+                 <button className="px-6 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Filtro</button>
+                 <button className="px-6 py-2 text-xs font-bold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Exportador</button>
+               </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-50">
+                    <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Veículo / Placa</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Rota / Motorista</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Status</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Progresso</th>
+                    <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Última Att.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {vehicles.map((v) => {
+                    const progress = v.status === 'Em Viagem' ? 39 : 0; // Mocking progress for visual fidelity
+                    const progressColor = v.status === 'Em Viagem' ? 'bg-[#004d40]' : 'bg-slate-200';
+                    
+                    return (
+                      <tr key={v.id} className="hover:bg-slate-50/50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
+                              <Truck size={20} />
+                            </div>
+                            <div>
+                              <p className="text-base font-black text-slate-800 leading-tight">
+                                {v.plate}
+                              </p>
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
+                                ATEGO
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-xs font-black text-slate-700 uppercase tracking-tight mb-1">
+                            {v.macro && v.macro !== 'Sem Macro' ? v.macro : 'ROTA NÃO IDENTIFICADA'}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                            <UserIcon size={12} className="text-slate-300" />
+                            <span className="uppercase">{v.driver}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <span className={cn(
+                            "inline-block px-3 py-1 text-[10px] font-black rounded-md uppercase tracking-wider leading-none",
+                            v.status === 'Em Viagem' ? "bg-blue-50 text-blue-400" : 
+                            v.status === 'Encerrado' ? "bg-slate-100 text-slate-500" :
+                            v.status === 'Parado' ? "bg-amber-50 text-amber-500" : 
+                            v.status === 'Aguardando' ? "bg-blue-50/50 text-blue-300" : "bg-purple-50 text-purple-400"
+                          )}>{v.status}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col items-center w-32 mx-auto">
+                            <span className={cn("text-[10px] font-black mb-1.5", progress > 0 ? "text-slate-700" : "text-slate-400")}>
+                              {progress} %
+                            </span>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div 
+                                className={cn("h-full transition-all duration-1000", progressColor)} 
+                                style={{ width: `${progress}%` }} 
+                              />
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                           <p className="text-[13px] font-black text-slate-700 font-mono">
+                             {v.lastUpdate.includes('T') 
+                               ? `${v.lastUpdate.split('-')[2].split('T')[0]}/${v.lastUpdate.split('-')[1]} ${v.lastUpdate.split('T')[1].substring(0, 5)}`
+                               : v.lastUpdate}
+                           </p>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-outline-variant">
-              <tr>
-                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">VEÍCULO / PLACA</th>
-                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">ROTA / MOTORISTA</th>
-                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px] text-center">STATUS</th>
-                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px]">PROGRESSO</th>
-                <th className="px-6 py-4 label-caps text-slate-500 font-bold text-[10px] text-right">ÚLTIMA ATT.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-outline-variant/30">
-              {latestShipments.map((s) => (
-                <ActivityRow 
-                  key={s.id}
-                  id={s.id}
-                  vehicle={s.vehicle}
-                  plate={s.plate}
-                  route={s.route}
-                  driver={s.driver}
-                  status={s.status}
-                  progress={s.progress}
-                  time={s.lastUpdate}
-                  statusColor={getStatusStyle(s.status)}
-                />
-              ))}
-            </tbody>
-          </table>
+
+        <div className="col-span-12 lg:col-span-4 space-y-6">
+           <div className="bg-white border border-outline-variant rounded-xl shadow-sm overflow-hidden flex flex-col h-[520px]">
+             <div className="p-4 border-b border-outline-variant flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertIcon size={18} className="text-red-600" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-700">Alertas de Atenção</span>
+                </div>
+                <span className="bg-red-100 text-red-700 text-[10px] font-black px-2 py-0.5 rounded">
+                  {(paradoEmViagem + semSinal).toString().padStart(2, '0')} ATIVOS
+                </span>
+             </div>
+             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/30">
+                {vehicles.filter(v => v.speed === 0 && v.ignition).map(v => (
+                  <div key={v.id} className="bg-white border-l-4 border-l-orange-500 border border-outline-variant p-3 shadow-sm rounded-r-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-[11px] font-black text-slate-700 uppercase">{v.plate}</span>
+                      <span className="text-[9px] font-bold text-orange-600 uppercase">Parado em Viagem</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2 truncate">{v.address}</p>
+                    <div className="flex justify-between items-center">
+                       <span className="text-[10px] font-mono text-slate-400">Há 0h12m</span>
+                       <button className="text-[9px] font-bold text-blue-600 hover:underline">VER NO MAPA</button>
+                    </div>
+                  </div>
+                ))}
+                {semSinal > 0 && vehicles.filter(v => {
+                  const last = new Date(v.lastUpdate).getTime();
+                  return (new Date().getTime() - last) > 15 * 60 * 1000;
+                }).map(v => (
+                  <div key={v.id} className="bg-white border-l-4 border-l-red-600 border border-outline-variant p-3 shadow-sm rounded-r-lg">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-[11px] font-black text-slate-800 uppercase">{v.plate}</span>
+                      <span className="text-[9px] font-bold text-red-600 uppercase">Sem Sinal</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2 truncate">Última pos: {v.address}</p>
+                    <div className="flex justify-between items-center">
+                       <span className="text-[10px] font-mono text-slate-400">{v.lastUpdate}</span>
+                       <button className="text-[9px] font-bold text-blue-600 hover:underline">CHECK-IN</button>
+                    </div>
+                  </div>
+                ))}
+                {(paradoEmViagem === 0 && semSinal === 0) && (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-8 mt-12">
+                    <CheckCircle2 size={48} className="text-slate-200 mb-4" />
+                    <p className="text-slate-500 font-bold text-sm">Operação Normal</p>
+                    <p className="text-slate-400 text-xs mt-1">Nenhum veículo com desvio crítico detectado no momento.</p>
+                  </div>
+                )}
+             </div>
+           </div>
+
+           <div className="bg-white border border-outline-variant rounded-xl shadow-sm p-4 space-y-4">
+             <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 border-b border-slate-100 pb-2">Distribuição de Status</h4>
+             <div className="space-y-3">
+                <StatusRow label="Em Viagem" count={emViagem} total={totalFrota} color="bg-blue-600" />
+                <StatusRow label="Parado" count={parado} total={totalFrota} color="bg-amber-500" />
+                <StatusRow label="Aguardando" count={aguardando} total={totalFrota} color="bg-cyan-500" />
+                <StatusRow label="Encerrado" count={encerrado} total={totalFrota} color="bg-slate-400" />
+             </div>
+           </div>
         </div>
-      </section>
+      </div>
+    </div>
+  );
+};
+
+const KPIBox: React.FC<{
+  label: string;
+  value: string | number;
+  color: string;
+  barColor: string;
+  icon: React.ReactNode;
+  secondaryLabel?: string;
+  secondaryColor?: string;
+  iconBgColor?: string;
+}> = ({ label, value, color, barColor, icon, secondaryLabel, secondaryColor = "text-teal-600", iconBgColor = "bg-teal-50" }) => (
+  <div className="bg-white p-4 border border-slate-200 rounded-2xl flex flex-col h-[150px] justify-between transition-all shadow-sm hover:shadow-md relative group">
+    <div className="flex justify-between items-start">
+      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105", iconBgColor)}>
+        <div className={cn(color)}>{icon}</div>
+      </div>
+      <span className={cn("text-[9px] font-black uppercase tracking-tight", secondaryColor)}>
+        {secondaryLabel}
+      </span>
+    </div>
+    
+    <div className="mt-2">
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+        {label}
+      </p>
+      <h3 className={cn("text-4xl font-black tracking-tighter leading-none", color)}>
+        {typeof value === 'number' ? value.toString().padStart(2, '0') : value}
+      </h3>
+    </div>
+    
+    <div className="h-1 w-full bg-slate-50 rounded-full overflow-hidden mt-3">
+      <div 
+        className={cn("h-full transition-all duration-1000", barColor)} 
+        style={{ width: (value !== 0 && value !== '0' && value !== '00') ? '85%' : '0%' }} 
+      />
+    </div>
+  </div>
+);
+
+const StatusRow: React.FC<{ label: string; count: number; total: number; color: string }> = ({ label, count, total, color }) => {
+  const percent = total > 0 ? (count / total) * 100 : 0;
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-end">
+        <span className="text-[10px] font-bold text-slate-600 uppercase tracking-tighter">{label}</span>
+        <span className="text-[10px] font-mono font-bold text-slate-400">{count} ({percent.toFixed(0)}%)</span>
+      </div>
+      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all duration-700", color)} style={{ width: `${percent}%` }} />
+      </div>
     </div>
   );
 };
@@ -278,11 +420,11 @@ const ActivityRow: React.FC<{
   <tr className="hover:bg-slate-50/50 transition-colors group">
     <td className="px-6 py-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-primary-container/10 rounded-xl flex items-center justify-center text-primary-container">
+        <div className="w-10 h-10 bg-primary-container/10 rounded-xl flex items-center justify-center text-primary-container text-primary-container">
           <Truck size={20} />
         </div>
         <div>
-          <p className="text-sm font-black text-primary-container uppercase leading-none mb-1">
+          <p className="text-sm font-black text-primary-container uppercase leading-none mb-1 uppercase leading-none mb-1">
             {plate}
           </p>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
@@ -291,18 +433,14 @@ const ActivityRow: React.FC<{
         </div>
       </div>
     </td>
-    <td className="px-6 py-4">
-      <div>
-        <p className="text-sm font-black text-slate-700 uppercase leading-tight mb-1">
-          {route}
-        </p>
-        <div className="flex items-center gap-1.5">
-          <UserIcon size={12} className="text-slate-400" />
-          <p className="text-[11px] font-bold text-slate-500">
-            {driver || 'Motorista não informado'}
-          </p>
-        </div>
+    <td className="px-6 py-4 text-xs font-bold text-slate-600">
+      <div className="flex items-center gap-2">
+        <UserIcon size={12} className="text-slate-400" />
+        {driver || '---'}
       </div>
+    </td>
+    <td className="px-6 py-4 text-xs font-mono font-bold text-slate-500">
+      {route}
     </td>
     <td className="px-6 py-4">
       <div className="flex justify-center">
@@ -326,7 +464,7 @@ const ActivityRow: React.FC<{
       </div>
     </td>
     <td className="px-6 py-4 text-right">
-      <span className="text-xs font-black text-slate-600">{time}</span>
+      <span className="text-xs font-black text-slate-600 font-black text-slate-600">{time}</span>
     </td>
   </tr>
 );

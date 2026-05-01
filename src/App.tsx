@@ -8,6 +8,7 @@ import { PerformanceView } from './components/PerformanceView';
 import { LoginView } from './components/LoginView';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ShipmentProvider } from './contexts/ShipmentContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import { Headphones, Loader2 } from 'lucide-react';
 import { ShipmentsView } from './components/ShipmentsView';
 import { ProfileView } from './components/ProfileView';
@@ -101,7 +102,9 @@ export default function App() {
   return (
     <AuthProvider>
       <ShipmentProvider>
-        <AppContent />
+        <NotificationProvider>
+          <AppContent />
+        </NotificationProvider>
       </ShipmentProvider>
     </AuthProvider>
   );

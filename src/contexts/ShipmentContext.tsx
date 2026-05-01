@@ -1,7 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Shipment, FleetVehicle, ShipmentStatus, Driver } from '../types';
+import axios from 'axios';
+import { Shipment, FleetVehicle, ShipmentStatus, Driver, DriverScoreboard, FleetMetrics } from '../types';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import toast from 'react-hot-toast';
 
 interface ShipmentContextType {
   shipments: Shipment[];
@@ -112,9 +114,12 @@ export const ShipmentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           lastUpdate: v.last_update ? new Date(v.last_update).toLocaleTimeString() : 'N/A',
           ignition: v.ignition || false,
           address: v.address || '',
-          category: v.category || ''
+          category: v.category || '',
+          macro: v.last_macro,
+          status: v.operational_status,
+          driver: v.current_driver
         })));
-      } else {
+      } else if (!isAuthenticated) {
         setVehicles(MOCK_VEHICLES);
       }
 
@@ -164,27 +169,81 @@ export const ShipmentProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
   }, [isAuthenticated, fetchData]);
 
-  const syncSascar = async () => {
-    setLoading(true);
+  const syncSascar = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
-      // Simulação de delay para buscar dados do rastreador
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('Starting Sascar Sync...');
+      const response = await axios.get('/api/sascar/fleet');
+      const { vehicles: sascarVehicles } = response.data;
       
-      setVehicles(prev => prev.map(v => ({
-        ...v,
-        lastUpdate: new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-        speed: v.ignition ? Math.floor(Math.random() * 20) + 60 : 0,
-        lat: v.lat + (Math.random() - 0.5) * 0.01,
-        lng: v.lng + (Math.random() - 0.5) * 0.01
-      })));
+      console.log(`Sascar Sync: Obtained ${sascarVehicles?.length || 0} vehicles`);
 
-      await fetchData();
+      if (sascarVehicles && sascarVehicles.length > 0) {
+        // Map to our local FleetVehicle type
+        const updatedVehicles: FleetVehicle[] = sascarVehicles.map((v: any) => ({
+          id: v.id,
+          plate: v.plate,
+          prefix: v.prefix,
+          lat: v.lat,
+          lng: v.lng,
+          speed: v.speed,
+          lastUpdate: v.lastUpdate,
+          ignition: v.ignition,
+          address: v.address || 'Localização obtida via Sascar',
+          macro: v.macro,
+          status: v.status,
+          driver: v.driver
+        }));
+
+        setVehicles(updatedVehicles);
+        
+        // Batch upsert to Supabase for performance
+        // We'll do it in chunks or just all at once if not too many
+        const upsertData = updatedVehicles.map(v => ({
+          plate: v.plate,
+          prefix: v.prefix,
+          last_lat: v.lat,
+          last_lng: v.lng,
+          last_speed: v.speed,
+          last_update: new Date().toISOString(),
+          ignition: v.ignition,
+          address: v.address,
+          last_macro: v.macro,
+          operational_status: v.status,
+          current_driver: v.driver
+        }));
+
+        const { error: upsertError } = await supabase.from('vehicles').upsert(upsertData, { onConflict: 'plate' });
+        if (upsertError) console.warn('Supabase positions upsert error:', upsertError);
+      }
+      
+      if (!silent) {
+        await fetchData();
+        toast.success('Sincronização concluída!');
+      }
     } catch (err: any) {
       console.error('Sascar sync failed:', err.message);
+      if (!silent) {
+        toast.error(`Falha na sincronização: ${err.response?.data?.error || err.message}`);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  };
+  }, [fetchData]);
+
+  // Automatic sync interval (every 2 minutes)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    // Initial sync
+    syncSascar(true);
+
+    const intervalId = setInterval(() => {
+      syncSascar(true);
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated, syncSascar]);
 
   const addShipment = async (shipment: Omit<Shipment, 'lastUpdate'>) => {
     // First, ensure the vehicle exists in the vehicles table
